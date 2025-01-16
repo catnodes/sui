@@ -7,9 +7,8 @@ publish = false
 edition = "2021"
 
 [dependencies]
-serde = { version = "1.0.144", features = ["derive"] }
-serde_repr = "0.1"
+serde.workspace = true
+serde_repr.workspace = true
 fastcrypto = { workspace = true, features = ["copy_key"] }
-eyre = "0.6.8"
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
-bcs = "0.1.4"
+eyre.workspace = true
+bcs.workspace = true

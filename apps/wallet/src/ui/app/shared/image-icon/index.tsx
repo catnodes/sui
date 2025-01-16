@@ -4,25 +4,30 @@
 import { cva, type VariantProps } from 'class-variance-authority';
 import { useState } from 'react';
 
-const imageStyle = cva(['text-white capitalize overflow-hidden bg-gray-40  shrink-0'], {
-	variants: {
-		size: {
-			sm: 'w-6 h-6 font-medium text-subtitleSmallExtra',
-			md: 'w-7.5 h-7.5 font-medium text-body',
-			lg: 'md:w-10 md:h-10 w-8 h-8 font-medium text-heading4 md:text-3xl',
-			xl: 'md:w-31.5 md:h-31.5 w-16 h-16 font-medium text-heading4 md:text-5xl',
+const imageStyle = cva(
+	['text-white capitalize overflow-hidden bg-gray-40 shrink-0 bg-transparent'],
+	{
+		variants: {
+			size: {
+				sm: 'w-6 h-6 font-medium text-subtitleSmallExtra',
+				md: 'w-7.5 h-7.5 font-medium text-body',
+				lg: 'w-10 h-10 font-medium text-heading4',
+				xl: 'w-12.5 h-12.5 font-medium text-heading4',
+				xxl: 'w-15 h-15 font-medium text-heading4',
+			},
+			rounded: {
+				full: 'rounded-full',
+				md: 'rounded-md',
+				lg: 'rounded-lg',
+			},
 		},
-		circle: {
-			true: 'rounded-full',
-			false: 'rounded-md',
-		},
-	},
 
-	defaultVariants: {
-		circle: false,
-		size: 'md',
+		defaultVariants: {
+			rounded: 'md',
+			size: 'md',
+		},
 	},
-});
+);
 
 export interface ImageIconProps extends VariantProps<typeof imageStyle> {
 	src: string | null;
@@ -43,13 +48,13 @@ export function ImageIcon({ src, label, alt = label, fallback, ...styleProps }: 
 	const [error, setError] = useState(false);
 	return (
 		<div role="img" className={imageStyle(styleProps)} aria-label={label}>
-			{error ? (
+			{error || !src ? (
 				<FallBackAvatar str={fallback} />
 			) : (
 				<img
-					src={src || ''}
+					src={src}
 					alt={alt}
-					className="flex h-full w-full items-center justify-center object-contain"
+					className="flex h-full w-full items-center justify-center object-cover"
 					onError={() => setError(true)}
 				/>
 			)}

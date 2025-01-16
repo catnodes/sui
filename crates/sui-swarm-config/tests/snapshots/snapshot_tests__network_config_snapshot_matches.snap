@@ -14,59 +14,32 @@ validator_configs:
     db-path: /tmp/foo/
     network-address: ""
     json-rpc-address: "0.0.0.0:1"
+    rpc:
+      enable-experimental-rest-api: true
     metrics-address: "0.0.0.0:1"
     admin-interface-port: 8888
     consensus-config:
-      address: ""
       db-path: /tmp/foo/
-      internal-worker-address: ""
+      db-retention-epochs: ~
+      db-pruner-period-secs: ~
       max-pending-transactions: ~
       max-submit-position: ~
       submit-delay-step-override-millis: ~
-      narwhal-config:
-        header_num_of_batches_threshold: 32
-        max_header_num_of_batches: 1000
-        max_header_delay: 2000ms
-        min_header_delay: 500ms
-        gc_depth: 50
-        sync_retry_delay: 5000ms
-        sync_retry_nodes: 3
-        batch_size: 5000000
-        max_batch_delay: 100ms
-        block_synchronizer:
-          range_synchronize_timeout: 30000ms
-          certificates_synchronize_timeout: 30000ms
-          payload_synchronize_timeout: 30000ms
-          payload_availability_timeout: 30000ms
-          handler_certificate_deliver_timeout: 30000ms
-        consensus_api_grpc:
-          socket_addr: ""
-          get_collections_timeout: 5000ms
-          remove_collections_timeout: 5000ms
-        max_concurrent_requests: 500000
-        prometheus_metrics:
-          socket_addr: /ip4/127.0.0.1/tcp/1234
-        network_admin_server:
-          primary_network_admin_server_port: 5678
-          worker_network_admin_server_base_port: 8765
-        anemo:
-          send_certificate_rate_limit: ~
-          get_payload_availability_rate_limit: ~
-          get_certificates_rate_limit: ~
-          report_batch_rate_limit: ~
-          request_batch_rate_limit: ~
-    enable-event-processing: false
+      parameters: ~
     enable-index-processing: true
+    jsonrpc-server-type: ~
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
       listen-address: "0.0.0.0:1"
+      state-sync:
+        checkpoint-content-timeout-ms: 10000
     genesis:
       genesis: "[fake genesis]"
     authority-store-pruning-config:
       num-latest-epoch-dbs-to-retain: 3
       epoch-db-pruning-period-secs: 3600
-      num-epochs-to-retain: 2
+      num-epochs-to-retain: 0
       max-checkpoints-in-batch: 10
       max-transactions-in-batch: 1000
     end-of-epoch-broadcast-channel-capacity: 128
@@ -77,20 +50,122 @@ validator_configs:
       perform-db-checkpoints-at-epoch-end: false
     indirect-objects-threshold: 18446744073709551615
     expensive-safety-check-config:
-      enable-epoch-sui-conservation-check: true
-      enable-deep-per-tx-sui-conservation-check: true
+      enable-epoch-sui-conservation-check: false
+      enable-deep-per-tx-sui-conservation-check: false
       force-disable-epoch-sui-conservation-check: false
-      enable-state-consistency-check: true
+      enable-state-consistency-check: false
       force-disable-state-consistency-check: false
-      enable-move-vm-paranoid-checks: true
+      enable-secondary-index-checks: false
     transaction-deny-config:
-      package_publish_disabled: false
-      package_upgrade_disabled: false
-      shared_object_disabled: false
-      user_transaction_disabled: false
+      package-publish-disabled: false
+      package-upgrade-disabled: false
+      shared-object-disabled: false
+      user-transaction-disabled: false
+      receiving-objects-disabled: false
+      zklogin-sig-disabled: false
+      zklogin-disabled-providers: []
     certificate-deny-config: {}
     state-debug-dump-config: {}
-    state-archive-config: {}
+    state-archive-write-config:
+      concurrency: 0
+      use-for-pruning-watermark: false
+    state-archive-read-config: []
+    state-snapshot-write-config:
+      concurrency: 0
+    indexer-max-subscriptions: ~
+    transaction-kv-store-read-config:
+      base-url: "https://transactions.sui.io/"
+      cache-size: 100000
+    jwk-fetch-interval-seconds: 3600
+    zklogin-oauth-providers:
+      Mainnet:
+        - Apple
+        - Arden
+        - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
+        - Credenza3
+        - Facebook
+        - FanTV
+        - Google
+        - KarrierOne
+        - Onefc
+        - Playtron
+        - Threedos
+        - Twitch
+      Testnet:
+        - Apple
+        - Arden
+        - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
+        - Credenza3
+        - Facebook
+        - FanTV
+        - Google
+        - KarrierOne
+        - Onefc
+        - Playtron
+        - Threedos
+        - Twitch
+      Unknown:
+        - Apple
+        - Arden
+        - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A"
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
+        - Credenza3
+        - Facebook
+        - FanTV
+        - Google
+        - Kakao
+        - KarrierOne
+        - Microsoft
+        - Onefc
+        - Playtron
+        - Slack
+        - TestIssuer
+        - Threedos
+        - Twitch
+    authority-overload-config:
+      max-txn-age-in-queue:
+        secs: 0
+        nanos: 500000000
+      overload-monitor-interval:
+        secs: 10
+        nanos: 0
+      execution-queue-latency-soft-limit:
+        secs: 1
+        nanos: 0
+      execution-queue-latency-hard-limit:
+        secs: 10
+        nanos: 0
+      max-load-shedding-percentage: 95
+      min-load-shedding-percentage-above-hard-limit: 50
+      safe-transaction-ready-rate: 100
+      check-system-overload-at-signing: true
+      max-transaction-manager-queue-length: 100000
+      max-transaction-manager-per-object-queue-length: 20
+    execution-cache:
+      writeback-cache:
+        max_cache_size: ~
+        package_cache_size: ~
+        object_cache_size: ~
+        marker_cache_size: ~
+        object_by_id_cache_size: ~
+        transaction_cache_size: ~
+        executed_effect_cache_size: ~
+        effect_cache_size: ~
+        events_cache_size: ~
+        transaction_objects_cache_size: ~
+        backpressure_threshold: ~
+        backpressure_threshold_for_rpc: ~
+    enable-soft-bundle: true
+    enable-validator-tx-finalizer: true
+    verifier-signing-config:
+      max-per-fun-meter-units: ~
+      max-per-mod-meter-units: ~
+      max-per-pkg-meter-units: ~
+      max-back-edges-per-function: ~
+      max-back-edges-per-module: ~
   - protocol-key-pair:
       value: avYcyVgYMXTyaUYh9IRwLK0gSzl7YF6ZQDAbrS1Bhvo=
     worker-key-pair:
@@ -102,59 +177,32 @@ validator_configs:
     db-path: /tmp/foo/
     network-address: ""
     json-rpc-address: "0.0.0.0:1"
+    rpc:
+      enable-experimental-rest-api: true
     metrics-address: "0.0.0.0:1"
     admin-interface-port: 8888
     consensus-config:
-      address: ""
       db-path: /tmp/foo/
-      internal-worker-address: ""
+      db-retention-epochs: ~
+      db-pruner-period-secs: ~
       max-pending-transactions: ~
       max-submit-position: ~
       submit-delay-step-override-millis: ~
-      narwhal-config:
-        header_num_of_batches_threshold: 32
-        max_header_num_of_batches: 1000
-        max_header_delay: 2000ms
-        min_header_delay: 500ms
-        gc_depth: 50
-        sync_retry_delay: 5000ms
-        sync_retry_nodes: 3
-        batch_size: 5000000
-        max_batch_delay: 100ms
-        block_synchronizer:
-          range_synchronize_timeout: 30000ms
-          certificates_synchronize_timeout: 30000ms
-          payload_synchronize_timeout: 30000ms
-          payload_availability_timeout: 30000ms
-          handler_certificate_deliver_timeout: 30000ms
-        consensus_api_grpc:
-          socket_addr: ""
-          get_collections_timeout: 5000ms
-          remove_collections_timeout: 5000ms
-        max_concurrent_requests: 500000
-        prometheus_metrics:
-          socket_addr: /ip4/127.0.0.1/tcp/1234
-        network_admin_server:
-          primary_network_admin_server_port: 5678
-          worker_network_admin_server_base_port: 8765
-        anemo:
-          send_certificate_rate_limit: ~
-          get_payload_availability_rate_limit: ~
-          get_certificates_rate_limit: ~
-          report_batch_rate_limit: ~
-          request_batch_rate_limit: ~
-    enable-event-processing: false
+      parameters: ~
     enable-index-processing: true
+    jsonrpc-server-type: ~
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
       listen-address: "0.0.0.0:1"
+      state-sync:
+        checkpoint-content-timeout-ms: 10000
     genesis:
       genesis: "[fake genesis]"
     authority-store-pruning-config:
       num-latest-epoch-dbs-to-retain: 3
       epoch-db-pruning-period-secs: 3600
-      num-epochs-to-retain: 2
+      num-epochs-to-retain: 0
       max-checkpoints-in-batch: 10
       max-transactions-in-batch: 1000
     end-of-epoch-broadcast-channel-capacity: 128
@@ -165,20 +213,122 @@ validator_configs:
       perform-db-checkpoints-at-epoch-end: false
     indirect-objects-threshold: 18446744073709551615
     expensive-safety-check-config:
-      enable-epoch-sui-conservation-check: true
-      enable-deep-per-tx-sui-conservation-check: true
+      enable-epoch-sui-conservation-check: false
+      enable-deep-per-tx-sui-conservation-check: false
       force-disable-epoch-sui-conservation-check: false
-      enable-state-consistency-check: true
+      enable-state-consistency-check: false
       force-disable-state-consistency-check: false
-      enable-move-vm-paranoid-checks: true
+      enable-secondary-index-checks: false
     transaction-deny-config:
-      package_publish_disabled: false
-      package_upgrade_disabled: false
-      shared_object_disabled: false
-      user_transaction_disabled: false
+      package-publish-disabled: false
+      package-upgrade-disabled: false
+      shared-object-disabled: false
+      user-transaction-disabled: false
+      receiving-objects-disabled: false
+      zklogin-sig-disabled: false
+      zklogin-disabled-providers: []
     certificate-deny-config: {}
     state-debug-dump-config: {}
-    state-archive-config: {}
+    state-archive-write-config:
+      concurrency: 0
+      use-for-pruning-watermark: false
+    state-archive-read-config: []
+    state-snapshot-write-config:
+      concurrency: 0
+    indexer-max-subscriptions: ~
+    transaction-kv-store-read-config:
+      base-url: "https://transactions.sui.io/"
+      cache-size: 100000
+    jwk-fetch-interval-seconds: 3600
+    zklogin-oauth-providers:
+      Mainnet:
+        - Apple
+        - Arden
+        - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
+        - Credenza3
+        - Facebook
+        - FanTV
+        - Google
+        - KarrierOne
+        - Onefc
+        - Playtron
+        - Threedos
+        - Twitch
+      Testnet:
+        - Apple
+        - Arden
+        - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
+        - Credenza3
+        - Facebook
+        - FanTV
+        - Google
+        - KarrierOne
+        - Onefc
+        - Playtron
+        - Threedos
+        - Twitch
+      Unknown:
+        - Apple
+        - Arden
+        - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A"
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
+        - Credenza3
+        - Facebook
+        - FanTV
+        - Google
+        - Kakao
+        - KarrierOne
+        - Microsoft
+        - Onefc
+        - Playtron
+        - Slack
+        - TestIssuer
+        - Threedos
+        - Twitch
+    authority-overload-config:
+      max-txn-age-in-queue:
+        secs: 0
+        nanos: 500000000
+      overload-monitor-interval:
+        secs: 10
+        nanos: 0
+      execution-queue-latency-soft-limit:
+        secs: 1
+        nanos: 0
+      execution-queue-latency-hard-limit:
+        secs: 10
+        nanos: 0
+      max-load-shedding-percentage: 95
+      min-load-shedding-percentage-above-hard-limit: 50
+      safe-transaction-ready-rate: 100
+      check-system-overload-at-signing: true
+      max-transaction-manager-queue-length: 100000
+      max-transaction-manager-per-object-queue-length: 20
+    execution-cache:
+      writeback-cache:
+        max_cache_size: ~
+        package_cache_size: ~
+        object_cache_size: ~
+        marker_cache_size: ~
+        object_by_id_cache_size: ~
+        transaction_cache_size: ~
+        executed_effect_cache_size: ~
+        effect_cache_size: ~
+        events_cache_size: ~
+        transaction_objects_cache_size: ~
+        backpressure_threshold: ~
+        backpressure_threshold_for_rpc: ~
+    enable-soft-bundle: true
+    enable-validator-tx-finalizer: true
+    verifier-signing-config:
+      max-per-fun-meter-units: ~
+      max-per-mod-meter-units: ~
+      max-per-pkg-meter-units: ~
+      max-back-edges-per-function: ~
+      max-back-edges-per-module: ~
   - protocol-key-pair:
       value: OXnx3yM1C/ppgnDMx/o1d49fJs7E05kq11mXNae/O+I=
     worker-key-pair:
@@ -190,59 +340,32 @@ validator_configs:
     db-path: /tmp/foo/
     network-address: ""
     json-rpc-address: "0.0.0.0:1"
+    rpc:
+      enable-experimental-rest-api: true
     metrics-address: "0.0.0.0:1"
     admin-interface-port: 8888
     consensus-config:
-      address: ""
       db-path: /tmp/foo/
-      internal-worker-address: ""
+      db-retention-epochs: ~
+      db-pruner-period-secs: ~
       max-pending-transactions: ~
       max-submit-position: ~
       submit-delay-step-override-millis: ~
-      narwhal-config:
-        header_num_of_batches_threshold: 32
-        max_header_num_of_batches: 1000
-        max_header_delay: 2000ms
-        min_header_delay: 500ms
-        gc_depth: 50
-        sync_retry_delay: 5000ms
-        sync_retry_nodes: 3
-        batch_size: 5000000
-        max_batch_delay: 100ms
-        block_synchronizer:
-          range_synchronize_timeout: 30000ms
-          certificates_synchronize_timeout: 30000ms
-          payload_synchronize_timeout: 30000ms
-          payload_availability_timeout: 30000ms
-          handler_certificate_deliver_timeout: 30000ms
-        consensus_api_grpc:
-          socket_addr: ""
-          get_collections_timeout: 5000ms
-          remove_collections_timeout: 5000ms
-        max_concurrent_requests: 500000
-        prometheus_metrics:
-          socket_addr: /ip4/127.0.0.1/tcp/1234
-        network_admin_server:
-          primary_network_admin_server_port: 5678
-          worker_network_admin_server_base_port: 8765
-        anemo:
-          send_certificate_rate_limit: ~
-          get_payload_availability_rate_limit: ~
-          get_certificates_rate_limit: ~
-          report_batch_rate_limit: ~
-          request_batch_rate_limit: ~
-    enable-event-processing: false
+      parameters: ~
     enable-index-processing: true
+    jsonrpc-server-type: ~
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
       listen-address: "0.0.0.0:1"
+      state-sync:
+        checkpoint-content-timeout-ms: 10000
     genesis:
       genesis: "[fake genesis]"
     authority-store-pruning-config:
       num-latest-epoch-dbs-to-retain: 3
       epoch-db-pruning-period-secs: 3600
-      num-epochs-to-retain: 2
+      num-epochs-to-retain: 0
       max-checkpoints-in-batch: 10
       max-transactions-in-batch: 1000
     end-of-epoch-broadcast-channel-capacity: 128
@@ -253,20 +376,122 @@ validator_configs:
       perform-db-checkpoints-at-epoch-end: false
     indirect-objects-threshold: 18446744073709551615
     expensive-safety-check-config:
-      enable-epoch-sui-conservation-check: true
-      enable-deep-per-tx-sui-conservation-check: true
+      enable-epoch-sui-conservation-check: false
+      enable-deep-per-tx-sui-conservation-check: false
       force-disable-epoch-sui-conservation-check: false
-      enable-state-consistency-check: true
+      enable-state-consistency-check: false
       force-disable-state-consistency-check: false
-      enable-move-vm-paranoid-checks: true
+      enable-secondary-index-checks: false
     transaction-deny-config:
-      package_publish_disabled: false
-      package_upgrade_disabled: false
-      shared_object_disabled: false
-      user_transaction_disabled: false
+      package-publish-disabled: false
+      package-upgrade-disabled: false
+      shared-object-disabled: false
+      user-transaction-disabled: false
+      receiving-objects-disabled: false
+      zklogin-sig-disabled: false
+      zklogin-disabled-providers: []
     certificate-deny-config: {}
     state-debug-dump-config: {}
-    state-archive-config: {}
+    state-archive-write-config:
+      concurrency: 0
+      use-for-pruning-watermark: false
+    state-archive-read-config: []
+    state-snapshot-write-config:
+      concurrency: 0
+    indexer-max-subscriptions: ~
+    transaction-kv-store-read-config:
+      base-url: "https://transactions.sui.io/"
+      cache-size: 100000
+    jwk-fetch-interval-seconds: 3600
+    zklogin-oauth-providers:
+      Mainnet:
+        - Apple
+        - Arden
+        - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
+        - Credenza3
+        - Facebook
+        - FanTV
+        - Google
+        - KarrierOne
+        - Onefc
+        - Playtron
+        - Threedos
+        - Twitch
+      Testnet:
+        - Apple
+        - Arden
+        - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
+        - Credenza3
+        - Facebook
+        - FanTV
+        - Google
+        - KarrierOne
+        - Onefc
+        - Playtron
+        - Threedos
+        - Twitch
+      Unknown:
+        - Apple
+        - Arden
+        - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A"
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
+        - Credenza3
+        - Facebook
+        - FanTV
+        - Google
+        - Kakao
+        - KarrierOne
+        - Microsoft
+        - Onefc
+        - Playtron
+        - Slack
+        - TestIssuer
+        - Threedos
+        - Twitch
+    authority-overload-config:
+      max-txn-age-in-queue:
+        secs: 0
+        nanos: 500000000
+      overload-monitor-interval:
+        secs: 10
+        nanos: 0
+      execution-queue-latency-soft-limit:
+        secs: 1
+        nanos: 0
+      execution-queue-latency-hard-limit:
+        secs: 10
+        nanos: 0
+      max-load-shedding-percentage: 95
+      min-load-shedding-percentage-above-hard-limit: 50
+      safe-transaction-ready-rate: 100
+      check-system-overload-at-signing: true
+      max-transaction-manager-queue-length: 100000
+      max-transaction-manager-per-object-queue-length: 20
+    execution-cache:
+      writeback-cache:
+        max_cache_size: ~
+        package_cache_size: ~
+        object_cache_size: ~
+        marker_cache_size: ~
+        object_by_id_cache_size: ~
+        transaction_cache_size: ~
+        executed_effect_cache_size: ~
+        effect_cache_size: ~
+        events_cache_size: ~
+        transaction_objects_cache_size: ~
+        backpressure_threshold: ~
+        backpressure_threshold_for_rpc: ~
+    enable-soft-bundle: true
+    enable-validator-tx-finalizer: true
+    verifier-signing-config:
+      max-per-fun-meter-units: ~
+      max-per-mod-meter-units: ~
+      max-per-pkg-meter-units: ~
+      max-back-edges-per-function: ~
+      max-back-edges-per-module: ~
   - protocol-key-pair:
       value: CyNkjqNVr3HrHTH7f/NLs7u5lUHJzuPAw0PqMTD2y2s=
     worker-key-pair:
@@ -278,59 +503,32 @@ validator_configs:
     db-path: /tmp/foo/
     network-address: ""
     json-rpc-address: "0.0.0.0:1"
+    rpc:
+      enable-experimental-rest-api: true
     metrics-address: "0.0.0.0:1"
     admin-interface-port: 8888
     consensus-config:
-      address: ""
       db-path: /tmp/foo/
-      internal-worker-address: ""
+      db-retention-epochs: ~
+      db-pruner-period-secs: ~
       max-pending-transactions: ~
       max-submit-position: ~
       submit-delay-step-override-millis: ~
-      narwhal-config:
-        header_num_of_batches_threshold: 32
-        max_header_num_of_batches: 1000
-        max_header_delay: 2000ms
-        min_header_delay: 500ms
-        gc_depth: 50
-        sync_retry_delay: 5000ms
-        sync_retry_nodes: 3
-        batch_size: 5000000
-        max_batch_delay: 100ms
-        block_synchronizer:
-          range_synchronize_timeout: 30000ms
-          certificates_synchronize_timeout: 30000ms
-          payload_synchronize_timeout: 30000ms
-          payload_availability_timeout: 30000ms
-          handler_certificate_deliver_timeout: 30000ms
-        consensus_api_grpc:
-          socket_addr: ""
-          get_collections_timeout: 5000ms
-          remove_collections_timeout: 5000ms
-        max_concurrent_requests: 500000
-        prometheus_metrics:
-          socket_addr: /ip4/127.0.0.1/tcp/1234
-        network_admin_server:
-          primary_network_admin_server_port: 5678
-          worker_network_admin_server_base_port: 8765
-        anemo:
-          send_certificate_rate_limit: ~
-          get_payload_availability_rate_limit: ~
-          get_certificates_rate_limit: ~
-          report_batch_rate_limit: ~
-          request_batch_rate_limit: ~
-    enable-event-processing: false
+      parameters: ~
     enable-index-processing: true
+    jsonrpc-server-type: ~
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
       listen-address: "0.0.0.0:1"
+      state-sync:
+        checkpoint-content-timeout-ms: 10000
     genesis:
       genesis: "[fake genesis]"
     authority-store-pruning-config:
       num-latest-epoch-dbs-to-retain: 3
       epoch-db-pruning-period-secs: 3600
-      num-epochs-to-retain: 2
+      num-epochs-to-retain: 0
       max-checkpoints-in-batch: 10
       max-transactions-in-batch: 1000
     end-of-epoch-broadcast-channel-capacity: 128
@@ -341,20 +539,122 @@ validator_configs:
       perform-db-checkpoints-at-epoch-end: false
     indirect-objects-threshold: 18446744073709551615
     expensive-safety-check-config:
-      enable-epoch-sui-conservation-check: true
-      enable-deep-per-tx-sui-conservation-check: true
+      enable-epoch-sui-conservation-check: false
+      enable-deep-per-tx-sui-conservation-check: false
       force-disable-epoch-sui-conservation-check: false
-      enable-state-consistency-check: true
+      enable-state-consistency-check: false
       force-disable-state-consistency-check: false
-      enable-move-vm-paranoid-checks: true
+      enable-secondary-index-checks: false
     transaction-deny-config:
-      package_publish_disabled: false
-      package_upgrade_disabled: false
-      shared_object_disabled: false
-      user_transaction_disabled: false
+      package-publish-disabled: false
+      package-upgrade-disabled: false
+      shared-object-disabled: false
+      user-transaction-disabled: false
+      receiving-objects-disabled: false
+      zklogin-sig-disabled: false
+      zklogin-disabled-providers: []
     certificate-deny-config: {}
     state-debug-dump-config: {}
-    state-archive-config: {}
+    state-archive-write-config:
+      concurrency: 0
+      use-for-pruning-watermark: false
+    state-archive-read-config: []
+    state-snapshot-write-config:
+      concurrency: 0
+    indexer-max-subscriptions: ~
+    transaction-kv-store-read-config:
+      base-url: "https://transactions.sui.io/"
+      cache-size: 100000
+    jwk-fetch-interval-seconds: 3600
+    zklogin-oauth-providers:
+      Mainnet:
+        - Apple
+        - Arden
+        - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
+        - Credenza3
+        - Facebook
+        - FanTV
+        - Google
+        - KarrierOne
+        - Onefc
+        - Playtron
+        - Threedos
+        - Twitch
+      Testnet:
+        - Apple
+        - Arden
+        - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
+        - Credenza3
+        - Facebook
+        - FanTV
+        - Google
+        - KarrierOne
+        - Onefc
+        - Playtron
+        - Threedos
+        - Twitch
+      Unknown:
+        - Apple
+        - Arden
+        - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A"
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
+        - Credenza3
+        - Facebook
+        - FanTV
+        - Google
+        - Kakao
+        - KarrierOne
+        - Microsoft
+        - Onefc
+        - Playtron
+        - Slack
+        - TestIssuer
+        - Threedos
+        - Twitch
+    authority-overload-config:
+      max-txn-age-in-queue:
+        secs: 0
+        nanos: 500000000
+      overload-monitor-interval:
+        secs: 10
+        nanos: 0
+      execution-queue-latency-soft-limit:
+        secs: 1
+        nanos: 0
+      execution-queue-latency-hard-limit:
+        secs: 10
+        nanos: 0
+      max-load-shedding-percentage: 95
+      min-load-shedding-percentage-above-hard-limit: 50
+      safe-transaction-ready-rate: 100
+      check-system-overload-at-signing: true
+      max-transaction-manager-queue-length: 100000
+      max-transaction-manager-per-object-queue-length: 20
+    execution-cache:
+      writeback-cache:
+        max_cache_size: ~
+        package_cache_size: ~
+        object_cache_size: ~
+        marker_cache_size: ~
+        object_by_id_cache_size: ~
+        transaction_cache_size: ~
+        executed_effect_cache_size: ~
+        effect_cache_size: ~
+        events_cache_size: ~
+        transaction_objects_cache_size: ~
+        backpressure_threshold: ~
+        backpressure_threshold_for_rpc: ~
+    enable-soft-bundle: true
+    enable-validator-tx-finalizer: true
+    verifier-signing-config:
+      max-per-fun-meter-units: ~
+      max-per-mod-meter-units: ~
+      max-per-pkg-meter-units: ~
+      max-back-edges-per-function: ~
+      max-back-edges-per-module: ~
   - protocol-key-pair:
       value: X/I/kM+KvHcxAKEf2UU6Sr7SpN3bhiE9nP5CuM/iIY0=
     worker-key-pair:
@@ -366,59 +666,32 @@ validator_configs:
     db-path: /tmp/foo/
     network-address: ""
     json-rpc-address: "0.0.0.0:1"
+    rpc:
+      enable-experimental-rest-api: true
     metrics-address: "0.0.0.0:1"
     admin-interface-port: 8888
     consensus-config:
-      address: ""
       db-path: /tmp/foo/
-      internal-worker-address: ""
+      db-retention-epochs: ~
+      db-pruner-period-secs: ~
       max-pending-transactions: ~
       max-submit-position: ~
       submit-delay-step-override-millis: ~
-      narwhal-config:
-        header_num_of_batches_threshold: 32
-        max_header_num_of_batches: 1000
-        max_header_delay: 2000ms
-        min_header_delay: 500ms
-        gc_depth: 50
-        sync_retry_delay: 5000ms
-        sync_retry_nodes: 3
-        batch_size: 5000000
-        max_batch_delay: 100ms
-        block_synchronizer:
-          range_synchronize_timeout: 30000ms
-          certificates_synchronize_timeout: 30000ms
-          payload_synchronize_timeout: 30000ms
-          payload_availability_timeout: 30000ms
-          handler_certificate_deliver_timeout: 30000ms
-        consensus_api_grpc:
-          socket_addr: ""
-          get_collections_timeout: 5000ms
-          remove_collections_timeout: 5000ms
-        max_concurrent_requests: 500000
-        prometheus_metrics:
-          socket_addr: /ip4/127.0.0.1/tcp/1234
-        network_admin_server:
-          primary_network_admin_server_port: 5678
-          worker_network_admin_server_base_port: 8765
-        anemo:
-          send_certificate_rate_limit: ~
-          get_payload_availability_rate_limit: ~
-          get_certificates_rate_limit: ~
-          report_batch_rate_limit: ~
-          request_batch_rate_limit: ~
-    enable-event-processing: false
+      parameters: ~
     enable-index-processing: true
+    jsonrpc-server-type: ~
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
       listen-address: "0.0.0.0:1"
+      state-sync:
+        checkpoint-content-timeout-ms: 10000
     genesis:
       genesis: "[fake genesis]"
     authority-store-pruning-config:
       num-latest-epoch-dbs-to-retain: 3
       epoch-db-pruning-period-secs: 3600
-      num-epochs-to-retain: 2
+      num-epochs-to-retain: 0
       max-checkpoints-in-batch: 10
       max-transactions-in-batch: 1000
     end-of-epoch-broadcast-channel-capacity: 128
@@ -429,20 +702,122 @@ validator_configs:
       perform-db-checkpoints-at-epoch-end: false
     indirect-objects-threshold: 18446744073709551615
     expensive-safety-check-config:
-      enable-epoch-sui-conservation-check: true
-      enable-deep-per-tx-sui-conservation-check: true
+      enable-epoch-sui-conservation-check: false
+      enable-deep-per-tx-sui-conservation-check: false
       force-disable-epoch-sui-conservation-check: false
-      enable-state-consistency-check: true
+      enable-state-consistency-check: false
       force-disable-state-consistency-check: false
-      enable-move-vm-paranoid-checks: true
+      enable-secondary-index-checks: false
     transaction-deny-config:
-      package_publish_disabled: false
-      package_upgrade_disabled: false
-      shared_object_disabled: false
-      user_transaction_disabled: false
+      package-publish-disabled: false
+      package-upgrade-disabled: false
+      shared-object-disabled: false
+      user-transaction-disabled: false
+      receiving-objects-disabled: false
+      zklogin-sig-disabled: false
+      zklogin-disabled-providers: []
     certificate-deny-config: {}
     state-debug-dump-config: {}
-    state-archive-config: {}
+    state-archive-write-config:
+      concurrency: 0
+      use-for-pruning-watermark: false
+    state-archive-read-config: []
+    state-snapshot-write-config:
+      concurrency: 0
+    indexer-max-subscriptions: ~
+    transaction-kv-store-read-config:
+      base-url: "https://transactions.sui.io/"
+      cache-size: 100000
+    jwk-fetch-interval-seconds: 3600
+    zklogin-oauth-providers:
+      Mainnet:
+        - Apple
+        - Arden
+        - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
+        - Credenza3
+        - Facebook
+        - FanTV
+        - Google
+        - KarrierOne
+        - Onefc
+        - Playtron
+        - Threedos
+        - Twitch
+      Testnet:
+        - Apple
+        - Arden
+        - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
+        - Credenza3
+        - Facebook
+        - FanTV
+        - Google
+        - KarrierOne
+        - Onefc
+        - Playtron
+        - Threedos
+        - Twitch
+      Unknown:
+        - Apple
+        - Arden
+        - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A"
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
+        - Credenza3
+        - Facebook
+        - FanTV
+        - Google
+        - Kakao
+        - KarrierOne
+        - Microsoft
+        - Onefc
+        - Playtron
+        - Slack
+        - TestIssuer
+        - Threedos
+        - Twitch
+    authority-overload-config:
+      max-txn-age-in-queue:
+        secs: 0
+        nanos: 500000000
+      overload-monitor-interval:
+        secs: 10
+        nanos: 0
+      execution-queue-latency-soft-limit:
+        secs: 1
+        nanos: 0
+      execution-queue-latency-hard-limit:
+        secs: 10
+        nanos: 0
+      max-load-shedding-percentage: 95
+      min-load-shedding-percentage-above-hard-limit: 50
+      safe-transaction-ready-rate: 100
+      check-system-overload-at-signing: true
+      max-transaction-manager-queue-length: 100000
+      max-transaction-manager-per-object-queue-length: 20
+    execution-cache:
+      writeback-cache:
+        max_cache_size: ~
+        package_cache_size: ~
+        object_cache_size: ~
+        marker_cache_size: ~
+        object_by_id_cache_size: ~
+        transaction_cache_size: ~
+        executed_effect_cache_size: ~
+        effect_cache_size: ~
+        events_cache_size: ~
+        transaction_objects_cache_size: ~
+        backpressure_threshold: ~
+        backpressure_threshold_for_rpc: ~
+    enable-soft-bundle: true
+    enable-validator-tx-finalizer: true
+    verifier-signing-config:
+      max-per-fun-meter-units: ~
+      max-per-mod-meter-units: ~
+      max-per-pkg-meter-units: ~
+      max-back-edges-per-function: ~
+      max-back-edges-per-module: ~
   - protocol-key-pair:
       value: N272EiFDyKtxRbDKbyN6ujenJ+skPcRoc/XolpOLGnU=
     worker-key-pair:
@@ -454,59 +829,32 @@ validator_configs:
     db-path: /tmp/foo/
     network-address: ""
     json-rpc-address: "0.0.0.0:1"
+    rpc:
+      enable-experimental-rest-api: true
     metrics-address: "0.0.0.0:1"
     admin-interface-port: 8888
     consensus-config:
-      address: ""
       db-path: /tmp/foo/
-      internal-worker-address: ""
+      db-retention-epochs: ~
+      db-pruner-period-secs: ~
       max-pending-transactions: ~
       max-submit-position: ~
       submit-delay-step-override-millis: ~
-      narwhal-config:
-        header_num_of_batches_threshold: 32
-        max_header_num_of_batches: 1000
-        max_header_delay: 2000ms
-        min_header_delay: 500ms
-        gc_depth: 50
-        sync_retry_delay: 5000ms
-        sync_retry_nodes: 3
-        batch_size: 5000000
-        max_batch_delay: 100ms
-        block_synchronizer:
-          range_synchronize_timeout: 30000ms
-          certificates_synchronize_timeout: 30000ms
-          payload_synchronize_timeout: 30000ms
-          payload_availability_timeout: 30000ms
-          handler_certificate_deliver_timeout: 30000ms
-        consensus_api_grpc:
-          socket_addr: ""
-          get_collections_timeout: 5000ms
-          remove_collections_timeout: 5000ms
-        max_concurrent_requests: 500000
-        prometheus_metrics:
-          socket_addr: /ip4/127.0.0.1/tcp/1234
-        network_admin_server:
-          primary_network_admin_server_port: 5678
-          worker_network_admin_server_base_port: 8765
-        anemo:
-          send_certificate_rate_limit: ~
-          get_payload_availability_rate_limit: ~
-          get_certificates_rate_limit: ~
-          report_batch_rate_limit: ~
-          request_batch_rate_limit: ~
-    enable-event-processing: false
+      parameters: ~
     enable-index-processing: true
+    jsonrpc-server-type: ~
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
       listen-address: "0.0.0.0:1"
+      state-sync:
+        checkpoint-content-timeout-ms: 10000
     genesis:
       genesis: "[fake genesis]"
     authority-store-pruning-config:
       num-latest-epoch-dbs-to-retain: 3
       epoch-db-pruning-period-secs: 3600
-      num-epochs-to-retain: 2
+      num-epochs-to-retain: 0
       max-checkpoints-in-batch: 10
       max-transactions-in-batch: 1000
     end-of-epoch-broadcast-channel-capacity: 128
@@ -517,20 +865,122 @@ validator_configs:
       perform-db-checkpoints-at-epoch-end: false
     indirect-objects-threshold: 18446744073709551615
     expensive-safety-check-config:
-      enable-epoch-sui-conservation-check: true
-      enable-deep-per-tx-sui-conservation-check: true
+      enable-epoch-sui-conservation-check: false
+      enable-deep-per-tx-sui-conservation-check: false
       force-disable-epoch-sui-conservation-check: false
-      enable-state-consistency-check: true
+      enable-state-consistency-check: false
       force-disable-state-consistency-check: false
-      enable-move-vm-paranoid-checks: true
+      enable-secondary-index-checks: false
     transaction-deny-config:
-      package_publish_disabled: false
-      package_upgrade_disabled: false
-      shared_object_disabled: false
-      user_transaction_disabled: false
+      package-publish-disabled: false
+      package-upgrade-disabled: false
+      shared-object-disabled: false
+      user-transaction-disabled: false
+      receiving-objects-disabled: false
+      zklogin-sig-disabled: false
+      zklogin-disabled-providers: []
     certificate-deny-config: {}
     state-debug-dump-config: {}
-    state-archive-config: {}
+    state-archive-write-config:
+      concurrency: 0
+      use-for-pruning-watermark: false
+    state-archive-read-config: []
+    state-snapshot-write-config:
+      concurrency: 0
+    indexer-max-subscriptions: ~
+    transaction-kv-store-read-config:
+      base-url: "https://transactions.sui.io/"
+      cache-size: 100000
+    jwk-fetch-interval-seconds: 3600
+    zklogin-oauth-providers:
+      Mainnet:
+        - Apple
+        - Arden
+        - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
+        - Credenza3
+        - Facebook
+        - FanTV
+        - Google
+        - KarrierOne
+        - Onefc
+        - Playtron
+        - Threedos
+        - Twitch
+      Testnet:
+        - Apple
+        - Arden
+        - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
+        - Credenza3
+        - Facebook
+        - FanTV
+        - Google
+        - KarrierOne
+        - Onefc
+        - Playtron
+        - Threedos
+        - Twitch
+      Unknown:
+        - Apple
+        - Arden
+        - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A"
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
+        - Credenza3
+        - Facebook
+        - FanTV
+        - Google
+        - Kakao
+        - KarrierOne
+        - Microsoft
+        - Onefc
+        - Playtron
+        - Slack
+        - TestIssuer
+        - Threedos
+        - Twitch
+    authority-overload-config:
+      max-txn-age-in-queue:
+        secs: 0
+        nanos: 500000000
+      overload-monitor-interval:
+        secs: 10
+        nanos: 0
+      execution-queue-latency-soft-limit:
+        secs: 1
+        nanos: 0
+      execution-queue-latency-hard-limit:
+        secs: 10
+        nanos: 0
+      max-load-shedding-percentage: 95
+      min-load-shedding-percentage-above-hard-limit: 50
+      safe-transaction-ready-rate: 100
+      check-system-overload-at-signing: true
+      max-transaction-manager-queue-length: 100000
+      max-transaction-manager-per-object-queue-length: 20
+    execution-cache:
+      writeback-cache:
+        max_cache_size: ~
+        package_cache_size: ~
+        object_cache_size: ~
+        marker_cache_size: ~
+        object_by_id_cache_size: ~
+        transaction_cache_size: ~
+        executed_effect_cache_size: ~
+        effect_cache_size: ~
+        events_cache_size: ~
+        transaction_objects_cache_size: ~
+        backpressure_threshold: ~
+        backpressure_threshold_for_rpc: ~
+    enable-soft-bundle: true
+    enable-validator-tx-finalizer: true
+    verifier-signing-config:
+      max-per-fun-meter-units: ~
+      max-per-mod-meter-units: ~
+      max-per-pkg-meter-units: ~
+      max-back-edges-per-function: ~
+      max-back-edges-per-module: ~
   - protocol-key-pair:
       value: a74f03IOjL8ZFSWFChFVEi+wiMwHNwNCPDGIYkGfgjs=
     worker-key-pair:
@@ -542,59 +992,32 @@ validator_configs:
     db-path: /tmp/foo/
     network-address: ""
     json-rpc-address: "0.0.0.0:1"
+    rpc:
+      enable-experimental-rest-api: true
     metrics-address: "0.0.0.0:1"
     admin-interface-port: 8888
     consensus-config:
-      address: ""
       db-path: /tmp/foo/
-      internal-worker-address: ""
+      db-retention-epochs: ~
+      db-pruner-period-secs: ~
       max-pending-transactions: ~
       max-submit-position: ~
       submit-delay-step-override-millis: ~
-      narwhal-config:
-        header_num_of_batches_threshold: 32
-        max_header_num_of_batches: 1000
-        max_header_delay: 2000ms
-        min_header_delay: 500ms
-        gc_depth: 50
-        sync_retry_delay: 5000ms
-        sync_retry_nodes: 3
-        batch_size: 5000000
-        max_batch_delay: 100ms
-        block_synchronizer:
-          range_synchronize_timeout: 30000ms
-          certificates_synchronize_timeout: 30000ms
-          payload_synchronize_timeout: 30000ms
-          payload_availability_timeout: 30000ms
-          handler_certificate_deliver_timeout: 30000ms
-        consensus_api_grpc:
-          socket_addr: ""
-          get_collections_timeout: 5000ms
-          remove_collections_timeout: 5000ms
-        max_concurrent_requests: 500000
-        prometheus_metrics:
-          socket_addr: /ip4/127.0.0.1/tcp/1234
-        network_admin_server:
-          primary_network_admin_server_port: 5678
-          worker_network_admin_server_base_port: 8765
-        anemo:
-          send_certificate_rate_limit: ~
-          get_payload_availability_rate_limit: ~
-          get_certificates_rate_limit: ~
-          report_batch_rate_limit: ~
-          request_batch_rate_limit: ~
-    enable-event-processing: false
+      parameters: ~
     enable-index-processing: true
+    jsonrpc-server-type: ~
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
       listen-address: "0.0.0.0:1"
+      state-sync:
+        checkpoint-content-timeout-ms: 10000
     genesis:
       genesis: "[fake genesis]"
     authority-store-pruning-config:
       num-latest-epoch-dbs-to-retain: 3
       epoch-db-pruning-period-secs: 3600
-      num-epochs-to-retain: 2
+      num-epochs-to-retain: 0
       max-checkpoints-in-batch: 10
       max-transactions-in-batch: 1000
     end-of-epoch-broadcast-channel-capacity: 128
@@ -605,20 +1028,122 @@ validator_configs:
       perform-db-checkpoints-at-epoch-end: false
     indirect-objects-threshold: 18446744073709551615
     expensive-safety-check-config:
-      enable-epoch-sui-conservation-check: true
-      enable-deep-per-tx-sui-conservation-check: true
+      enable-epoch-sui-conservation-check: false
+      enable-deep-per-tx-sui-conservation-check: false
       force-disable-epoch-sui-conservation-check: false
-      enable-state-consistency-check: true
+      enable-state-consistency-check: false
       force-disable-state-consistency-check: false
-      enable-move-vm-paranoid-checks: true
+      enable-secondary-index-checks: false
     transaction-deny-config:
-      package_publish_disabled: false
-      package_upgrade_disabled: false
-      shared_object_disabled: false
-      user_transaction_disabled: false
+      package-publish-disabled: false
+      package-upgrade-disabled: false
+      shared-object-disabled: false
+      user-transaction-disabled: false
+      receiving-objects-disabled: false
+      zklogin-sig-disabled: false
+      zklogin-disabled-providers: []
     certificate-deny-config: {}
     state-debug-dump-config: {}
-    state-archive-config: {}
+    state-archive-write-config:
+      concurrency: 0
+      use-for-pruning-watermark: false
+    state-archive-read-config: []
+    state-snapshot-write-config:
+      concurrency: 0
+    indexer-max-subscriptions: ~
+    transaction-kv-store-read-config:
+      base-url: "https://transactions.sui.io/"
+      cache-size: 100000
+    jwk-fetch-interval-seconds: 3600
+    zklogin-oauth-providers:
+      Mainnet:
+        - Apple
+        - Arden
+        - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
+        - Credenza3
+        - Facebook
+        - FanTV
+        - Google
+        - KarrierOne
+        - Onefc
+        - Playtron
+        - Threedos
+        - Twitch
+      Testnet:
+        - Apple
+        - Arden
+        - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
+        - Credenza3
+        - Facebook
+        - FanTV
+        - Google
+        - KarrierOne
+        - Onefc
+        - Playtron
+        - Threedos
+        - Twitch
+      Unknown:
+        - Apple
+        - Arden
+        - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A"
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
+        - Credenza3
+        - Facebook
+        - FanTV
+        - Google
+        - Kakao
+        - KarrierOne
+        - Microsoft
+        - Onefc
+        - Playtron
+        - Slack
+        - TestIssuer
+        - Threedos
+        - Twitch
+    authority-overload-config:
+      max-txn-age-in-queue:
+        secs: 0
+        nanos: 500000000
+      overload-monitor-interval:
+        secs: 10
+        nanos: 0
+      execution-queue-latency-soft-limit:
+        secs: 1
+        nanos: 0
+      execution-queue-latency-hard-limit:
+        secs: 10
+        nanos: 0
+      max-load-shedding-percentage: 95
+      min-load-shedding-percentage-above-hard-limit: 50
+      safe-transaction-ready-rate: 100
+      check-system-overload-at-signing: true
+      max-transaction-manager-queue-length: 100000
+      max-transaction-manager-per-object-queue-length: 20
+    execution-cache:
+      writeback-cache:
+        max_cache_size: ~
+        package_cache_size: ~
+        object_cache_size: ~
+        marker_cache_size: ~
+        object_by_id_cache_size: ~
+        transaction_cache_size: ~
+        executed_effect_cache_size: ~
+        effect_cache_size: ~
+        events_cache_size: ~
+        transaction_objects_cache_size: ~
+        backpressure_threshold: ~
+        backpressure_threshold_for_rpc: ~
+    enable-soft-bundle: true
+    enable-validator-tx-finalizer: true
+    verifier-signing-config:
+      max-per-fun-meter-units: ~
+      max-per-mod-meter-units: ~
+      max-per-pkg-meter-units: ~
+      max-back-edges-per-function: ~
+      max-back-edges-per-module: ~
 account_keys:
   - Hloy4pnf8pWEHGP+4OFsXz56bLdIJhkD2O+OdKMqCA4=
   - pvMScjoMR/DaN0M5IOxS2VpGC59N6kv6gDm63ufLQ5w=
@@ -626,4 +1151,3 @@ account_keys:
   - mfPjCoE6SX0Sl84MnmNS/LS+tfPpkn7I8tziuk2g0WM=
   - 5RWlYF22jS9i76zLl8jP2D3D8GC5ht+IP1dWUBGZxi8=
 genesis: "[fake genesis]"
-

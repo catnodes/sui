@@ -1,13 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#![allow(dead_code)]
-
 use std::{
     fs, io,
     path::{Path, PathBuf},
 };
 
+use anyhow::{bail, Result};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -17,12 +16,7 @@ pub(crate) enum Error {
 
     #[error("Unexpected symlink: {}", .0.display())]
     Symlink(PathBuf),
-
-    #[error("IO Error: {0}")]
-    IO(#[from] io::Error),
 }
-
-type Result<T> = std::result::Result<T, Error>;
 
 /// Normalize the representation of `path` by eliminating redundant `.` components and applying `..`
 /// components.  Does not access the filesystem (e.g. to resolve symlinks or test for file
@@ -57,7 +51,7 @@ pub(crate) fn normalize_path<P: AsRef<Path>>(path: P) -> Result<PathBuf> {
                 }
 
                 Some(C::RootDir | C::Prefix(_)) => {
-                    return Err(Error::ParentOfRoot(path.as_ref().to_path_buf()))
+                    bail!(Error::ParentOfRoot(path.as_ref().to_path_buf()))
                 }
             },
         }
@@ -159,7 +153,7 @@ where
     }
 
     if src.is_symlink() {
-        return Err(Error::Symlink(src.to_path_buf()));
+        bail!(Error::Symlink(src.to_path_buf()));
     }
 
     for entry in fs::read_dir(src)? {
@@ -254,11 +248,11 @@ mod tests {
     fn test_path_relative_to_unrelated() {
         let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
         let sui_adapter = repo_root.join("sui-execution/latest/sui-adapter");
-        let vm_runtime = repo_root.join("external-crates/move/move-vm/runtime");
+        let vm_runtime = repo_root.join("external-crates/move/crates/move-vm-runtime");
 
         assert_eq!(
             path_relative_to(sui_adapter, vm_runtime).unwrap(),
-            PathBuf::from("../../../external-crates/move/move-vm/runtime"),
+            PathBuf::from("../../../external-crates/move/crates/move-vm-runtime"),
         );
     }
 

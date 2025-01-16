@@ -27,7 +27,7 @@ fn new_gas_coin_with_balance_and_owner(balance: u64, owner: Owner) -> Object {
     Object::new_move(
         MoveObject::new_gas_coin(OBJECT_START_VERSION, ObjectID::random(), balance),
         owner,
-        TransactionDigest::genesis(),
+        TransactionDigest::genesis_marker(),
     )
 }
 
@@ -54,12 +54,12 @@ fn generate_random_gas_data(
             Owner::ObjectOwner(_) | Owner::AddressOwner(_) if owned_by_sender => {
                 Owner::AddressOwner(sender)
             }
-            _ => *o,
+            _ => o.clone(),
         })
         .collect::<Vec<_>>();
     for owner in gas_coin_owners.iter().take(num_gas_objects - 1) {
         let gas_balance = rng.gen_range(0..=remaining_gas_balance);
-        let gas_object = new_gas_coin_with_balance_and_owner(gas_balance, *owner);
+        let gas_object = new_gas_coin_with_balance_and_owner(gas_balance, owner.clone());
         remaining_gas_balance -= gas_balance;
         object_refs.push(gas_object.compute_object_reference());
         gas_objects.push(gas_object);
@@ -67,7 +67,7 @@ fn generate_random_gas_data(
     // Put the remaining balance in the last gas object.
     let last_gas_object = new_gas_coin_with_balance_and_owner(
         remaining_gas_balance,
-        gas_coin_owners[num_gas_objects - 1],
+        gas_coin_owners[num_gas_objects - 1].clone(),
     );
     object_refs.push(last_gas_object.compute_object_reference());
     gas_objects.push(last_gas_object);
@@ -85,8 +85,8 @@ fn generate_random_gas_data(
         gas_data: GasData {
             payment: object_refs,
             owner: sender,
-            price: rng.gen_range(0..=ProtocolConfig::get_for_max_version().max_gas_price()),
-            budget: rng.gen_range(0..=ProtocolConfig::get_for_max_version().max_tx_gas()),
+            price: rng.gen_range(0..=ProtocolConfig::get_for_max_version_UNSAFE().max_gas_price()),
+            budget: rng.gen_range(0..=ProtocolConfig::get_for_max_version_UNSAFE().max_tx_gas()),
         },
         objects: gas_objects,
         sender_key,
@@ -110,16 +110,16 @@ pub struct GasDataGenConfig {
 impl GasDataGenConfig {
     pub fn owned_by_sender_or_immut() -> Self {
         Self {
-            max_num_gas_objects: ProtocolConfig::get_for_max_version().max_gas_payment_objects()
-                as usize,
+            max_num_gas_objects: ProtocolConfig::get_for_max_version_UNSAFE()
+                .max_gas_payment_objects() as usize,
             owned_by_sender: true,
         }
     }
 
     pub fn any_owner() -> Self {
         Self {
-            max_num_gas_objects: ProtocolConfig::get_for_max_version().max_gas_payment_objects()
-                as usize,
+            max_num_gas_objects: ProtocolConfig::get_for_max_version_UNSAFE()
+                .max_gas_payment_objects() as usize,
             owned_by_sender: false,
         }
     }

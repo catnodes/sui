@@ -24,6 +24,21 @@ use sui_protocol_config::ProtocolConfig;
 use super::*;
 
 #[test]
+fn test_bcs_enum() {
+    let address = Owner::AddressOwner(SuiAddress::random_for_testing_only());
+    let shared = Owner::Shared {
+        initial_shared_version: 1.into(),
+    };
+
+    let address_ser = bcs::to_bytes(&address).unwrap();
+    let shared_ser = bcs::to_bytes(&shared).unwrap();
+
+    println!("{:?}", address_ser);
+    println!("{:?}", shared_ser);
+    assert!(shared_ser.len() < address_ser.len());
+}
+
+#[test]
 fn test_signatures() {
     let (addr1, sec1): (_, AccountKeyPair) = get_key_pair();
     let (addr2, _sec2): (_, AccountKeyPair) = get_key_pair();
@@ -343,10 +358,12 @@ fn test_move_object_size_for_gas_metering() {
 #[test]
 fn test_move_package_size_for_gas_metering() {
     let module = file_format::empty_module();
+    let config = ProtocolConfig::get_for_max_version_UNSAFE();
     let package = Object::new_package(
         &[module],
-        TransactionDigest::genesis(),
-        ProtocolConfig::get_for_max_version().max_move_package_size(),
+        TransactionDigest::genesis_marker(),
+        config.max_move_package_size(),
+        config.move_binary_format_version(),
         &[], // empty dependencies for empty package (no modules)
     )
     .unwrap();

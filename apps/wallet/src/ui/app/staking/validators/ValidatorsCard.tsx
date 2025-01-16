@@ -1,32 +1,42 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useGetSystemState } from '@mysten/core';
+import BottomMenuLayout, { Content, Menu } from '_app/shared/bottom-menu-layout';
+import { Button } from '_app/shared/ButtonUI';
+import { Card, CardItem } from '_app/shared/card';
+import { Text } from '_app/shared/text';
+import Alert from '_components/alert';
+import LoadingIndicator from '_components/loading/LoadingIndicator';
+import { ampli } from '_src/shared/analytics/ampli';
+import {
+	DELEGATED_STAKES_QUERY_REFETCH_INTERVAL,
+	DELEGATED_STAKES_QUERY_STALE_TIME,
+} from '_src/shared/constants';
+import { useGetDelegatedStake } from '@mysten/core';
+import { useSuiClientQuery } from '@mysten/dapp-kit';
 import { Plus12 } from '@mysten/icons';
+import type { StakeObject } from '@mysten/sui/client';
 import { useMemo } from 'react';
 
 import { useActiveAddress } from '../../hooks/useActiveAddress';
 import { getAllStakeSui } from '../getAllStakeSui';
 import { StakeAmount } from '../home/StakeAmount';
-import { StakeCard } from '../home/StakedCard';
-import { useGetDelegatedStake } from '../useGetDelegatedStake';
-import { Button } from '_app/shared/ButtonUI';
-import BottomMenuLayout, { Menu, Content } from '_app/shared/bottom-menu-layout';
-import { Card, CardItem } from '_app/shared/card';
-import { Text } from '_app/shared/text';
-import Alert from '_components/alert';
-import LoadingIndicator from '_components/loading/LoadingIndicator';
+import { StakeCard, type DelegationObjectWithValidator } from '../home/StakedCard';
 
 export function ValidatorsCard() {
 	const accountAddress = useActiveAddress();
 	const {
 		data: delegatedStake,
-		isLoading,
+		isPending,
 		isError,
 		error,
-	} = useGetDelegatedStake(accountAddress || '');
+	} = useGetDelegatedStake({
+		address: accountAddress || '',
+		staleTime: DELEGATED_STAKES_QUERY_STALE_TIME,
+		refetchInterval: DELEGATED_STAKES_QUERY_REFETCH_INTERVAL,
+	});
 
-	const { data: system } = useGetSystemState();
+	const { data: system } = useSuiClientQuery('getLatestSuiSystemState');
 	const activeValidators = system?.activeValidators;
 
 	// Total active stake for all Staked validators
@@ -61,7 +71,8 @@ export function ValidatorsCard() {
 			delegatedStake.reduce(
 				(acc, curr) =>
 					curr.stakes.reduce(
-						(total, { estimatedReward }) => total + BigInt(estimatedReward || 0),
+						(total, { estimatedReward }: StakeObject & { estimatedReward?: string }) =>
+							total + BigInt(estimatedReward || 0),
 						acc,
 					),
 				0n,
@@ -71,7 +82,7 @@ export function ValidatorsCard() {
 
 	const numberOfValidators = delegatedStake?.length || 0;
 
-	if (isLoading) {
+	if (isPending) {
 		return (
 			<div className="p-2 w-full flex justify-center items-center h-full">
 				<LoadingIndicator />
@@ -108,7 +119,7 @@ export function ValidatorsCard() {
 									?.filter(({ inactiveValidator }) => inactiveValidator)
 									.map((delegation) => (
 										<StakeCard
-											delegationObject={delegation}
+											delegationObject={delegation as DelegationObjectWithValidator}
 											currentEpoch={Number(system.epoch)}
 											key={delegation.stakedSuiId}
 											inactiveValidator
@@ -142,7 +153,7 @@ export function ValidatorsCard() {
 									?.filter(({ inactiveValidator }) => !inactiveValidator)
 									.map((delegation) => (
 										<StakeCard
-											delegationObject={delegation}
+											delegationObject={delegation as DelegationObjectWithValidator}
 											currentEpoch={Number(system.epoch)}
 											key={delegation.stakedSuiId}
 										/>
@@ -151,7 +162,19 @@ export function ValidatorsCard() {
 					</div>
 				</Content>
 				<Menu stuckClass="staked-cta" className="w-full px-0 pb-0 mx-0">
-					<Button size="tall" variant="secondary" to="new" before={<Plus12 />} text="Stake SUI" />
+					<Button
+						size="tall"
+						variant="secondary"
+						to="new"
+						onClick={() =>
+							ampli.clickedStakeSui({
+								isCurrentlyStaking: true,
+								sourceFlow: 'Validator card',
+							})
+						}
+						before={<Plus12 />}
+						text="Stake SUI"
+					/>
 				</Menu>
 			</BottomMenuLayout>
 		</div>

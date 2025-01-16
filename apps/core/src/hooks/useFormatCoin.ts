@@ -1,11 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Coin, CoinMetadata, SUI_TYPE_ARG } from '@mysten/sui.js';
+import { useFeatureValue } from '@growthbook/growthbook-react';
+import { useSuiClient } from '@mysten/dapp-kit';
+import { CoinMetadata } from '@mysten/sui/client';
+import { SUI_TYPE_ARG } from '@mysten/sui/utils';
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import BigNumber from 'bignumber.js';
 import { useMemo } from 'react';
-import { useRpcClient } from '../api/RpcClientContext';
+
 import { formatAmount } from '../utils/formatAmount';
 
 type FormattedCoin = [
@@ -42,8 +45,21 @@ const ELLIPSIS = '\u{2026}';
 const SYMBOL_TRUNCATE_LENGTH = 5;
 const NAME_TRUNCATE_LENGTH = 10;
 
+type CoinMetadataOverrides = {
+	[coinType: string]: {
+		name?: string;
+		iconUrl?: string;
+		symbol?: string;
+	};
+};
+
 export function useCoinMetadata(coinType?: string | null) {
-	const rpc = useRpcClient();
+	const client = useSuiClient();
+	const tokenMetadataOverrides = useFeatureValue<CoinMetadataOverrides>(
+		'token-metadata-overrides',
+		{},
+	);
+
 	return useQuery({
 		queryKey: ['coin-metadata', coinType],
 		queryFn: async () => {
@@ -65,27 +81,40 @@ export function useCoinMetadata(coinType?: string | null) {
 				return metadata;
 			}
 
-			return rpc.getCoinMetadata({ coinType });
+			return client.getCoinMetadata({ coinType });
 		},
 		select(data) {
 			if (!data) return null;
 
+			const symbol =
+				coinType && tokenMetadataOverrides[coinType]?.symbol
+					? tokenMetadataOverrides[coinType].symbol
+					: data.symbol;
+			const name =
+				coinType && tokenMetadataOverrides[coinType]?.name
+					? tokenMetadataOverrides[coinType].name
+					: data.name;
+
 			return {
 				...data,
+				iconUrl:
+					coinType && tokenMetadataOverrides[coinType]?.iconUrl
+						? tokenMetadataOverrides[coinType].iconUrl
+						: data.iconUrl,
 				symbol:
-					data.symbol.length > SYMBOL_TRUNCATE_LENGTH
-						? data.symbol.slice(0, SYMBOL_TRUNCATE_LENGTH) + ELLIPSIS
-						: data.symbol,
+					symbol.length > SYMBOL_TRUNCATE_LENGTH
+						? symbol.slice(0, SYMBOL_TRUNCATE_LENGTH) + ELLIPSIS
+						: symbol,
 				name:
-					data.name.length > NAME_TRUNCATE_LENGTH
-						? data.name.slice(0, NAME_TRUNCATE_LENGTH) + ELLIPSIS
-						: data.name,
+					name.length > NAME_TRUNCATE_LENGTH
+						? name.slice(0, NAME_TRUNCATE_LENGTH) + ELLIPSIS
+						: name,
 			};
 		},
 		retry: false,
 		enabled: !!coinType,
 		staleTime: Infinity,
-		cacheTime: 24 * 60 * 60 * 1000,
+		gcTime: 24 * 60 * 60 * 1000,
 	});
 }
 
@@ -96,7 +125,7 @@ export function useFormatCoin(
 	coinType?: string | null,
 	format: CoinFormat = CoinFormat.ROUNDED,
 ): FormattedCoin {
-	const fallbackSymbol = useMemo(() => (coinType ? Coin.getCoinSymbol(coinType) : ''), [coinType]);
+	const fallbackSymbol = useMemo(() => (coinType ? getCoinSymbol(coinType) ?? '' : ''), [coinType]);
 
 	const queryResult = useCoinMetadata(coinType);
 	const { isFetched, data } = queryResult;
@@ -110,4 +139,9 @@ export function useFormatCoin(
 	}, [data?.decimals, isFetched, balance, format]);
 
 	return [formatted, isFetched ? data?.symbol || fallbackSymbol : '', queryResult];
+}
+
+/** @deprecated use coin metadata instead */
+export function getCoinSymbol(coinTypeArg: string) {
+	return coinTypeArg.substring(coinTypeArg.lastIndexOf(':') + 1);
 }

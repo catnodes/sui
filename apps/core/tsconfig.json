@@ -16,6 +16,5 @@
 		"jsx": "react-jsx"
 	},
 	"include": ["src"],
-	"exclude": ["node_modules"],
-	"references": [{ "path": "../../sdk/typescript/" }]
+	"exclude": ["node_modules"]
 }

@@ -42,11 +42,7 @@
 			"_values": ["./src/ui/styles/values"],
 			"_values/*": ["./src/ui/styles/values/*"],
 			"_utils": ["./src/ui/styles/utils"],
-			"_utils/*": ["./src/ui/styles/utils/*"],
-			"@mysten/sui.js": ["../../sdk/typescript/src/"],
-			"@mysten/bcs": ["../../sdk/bcs/src/"],
-			"@mysten/ledgerjs-hw-app-sui": ["../../sdk/ledgerjs-hw-app-sui/src/Sui.ts"],
-			"@mysten/wallet-standard": ["../../sdk/wallet-adapter/wallet-standard/src/"]
+			"_utils/*": ["./src/ui/styles/utils/*"]
 		}
 	},
 	"include": ["../../src", "../../tests"],

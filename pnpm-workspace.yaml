@@ -1,6 +1,7 @@
 packages:
-    - 'sdk/**'
-    - 'apps/**'
-    - 'dapps/sponsored-transactions'
-    - 'dapps/offline-signer-helper'
-    - 'dapps/kiosk'
+  - 'apps/**'
+  - 'dapps/**'
+  - 'examples/**'
+  - 'external-crates/move/tooling/prettier-move'
+  - '!**/dist/**'
+  - '!**/.next/**'

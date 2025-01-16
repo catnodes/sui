@@ -3,6 +3,7 @@
 
 use criterion::*;
 
+use itertools::Itertools as _;
 use rand::prelude::*;
 use rand::seq::SliceRandom;
 
@@ -14,8 +15,9 @@ use sui_types::committee::Committee;
 use sui_types::crypto::{get_key_pair, AccountKeyPair, AuthorityKeyPair};
 use sui_types::transaction::CertifiedTransaction;
 
+use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
 use sui_core::signature_verifier::*;
-
+use sui_types::signature_verification::VerifiedDigestCache;
 fn gen_certs(
     committee: &Committee,
     key_pairs: &[AuthorityKeyPair],
@@ -75,6 +77,11 @@ fn async_verifier_bench(c: &mut Criterion) {
                         committee.clone(),
                         batch_size,
                         metrics.clone(),
+                        vec![],
+                        ZkLoginEnv::Test,
+                        true,
+                        true,
+                        Some(30),
                     ));
 
                     b.iter(|| {
@@ -127,7 +134,11 @@ fn batch_verification_bench(c: &mut Criterion) {
                     assert_eq!(certs.len() as u64, *batch_size);
                     b.iter(|| {
                         certs.shuffle(&mut thread_rng());
-                        batch_verify_certificates(&committee, &certs);
+                        batch_verify_certificates(
+                            &committee,
+                            &certs.iter().collect_vec(),
+                            Arc::new(VerifiedDigestCache::new_empty()),
+                        );
                     })
                 },
             );

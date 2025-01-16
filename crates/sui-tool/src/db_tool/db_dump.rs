@@ -4,20 +4,29 @@
 use anyhow::{anyhow, Ok};
 use clap::{Parser, ValueEnum};
 use comfy_table::{Cell, ContentArrangement, Row, Table};
-use rocksdb::MultiThreaded;
+use prometheus::Registry;
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 use std::str;
 use std::sync::Arc;
 use strum_macros::EnumString;
+use sui_archival::reader::ArchiveReaderBalancer;
+use sui_config::node::AuthorityStorePruningConfig;
 use sui_core::authority::authority_per_epoch_store::AuthorityEpochTables;
-use sui_core::authority::authority_store_pruner::AuthorityStorePruner;
+use sui_core::authority::authority_store_pruner::{
+    AuthorityStorePruner, AuthorityStorePruningMetrics, EPOCH_DURATION_MS_FOR_TESTING,
+};
 use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
 use sui_core::authority::authority_store_types::{StoreData, StoreObject};
+use sui_core::checkpoints::CheckpointStore;
 use sui_core::epoch::committee_store::CommitteeStoreTables;
-use sui_storage::IndexStoreTables;
+use sui_core::jsonrpc_index::IndexStoreTables;
+use sui_core::rpc_index::RpcIndexStore;
+use sui_storage::mutex_table::RwLockTable;
 use sui_types::base_types::{EpochId, ObjectID};
+use tracing::info;
 use typed_store::rocks::{default_db_options, MetricConf};
+use typed_store::rocksdb::MultiThreaded;
 use typed_store::traits::{Map, TableSummary};
 
 #[derive(EnumString, Clone, Parser, Debug, ValueEnum)]
@@ -34,20 +43,23 @@ impl std::fmt::Display for StoreName {
 }
 
 pub fn list_tables(path: PathBuf) -> anyhow::Result<Vec<String>> {
-    rocksdb::DBWithThreadMode::<MultiThreaded>::list_cf(&default_db_options().options, path)
-        .map_err(|e| e.into())
-        .map(|q| {
-            q.iter()
-                .filter_map(|s| {
-                    // The `default` table is not used
-                    if s != "default" {
-                        Some(s.clone())
-                    } else {
-                        None
-                    }
-                })
-                .collect()
-        })
+    typed_store::rocksdb::DBWithThreadMode::<MultiThreaded>::list_cf(
+        &default_db_options().options,
+        path,
+    )
+    .map_err(|e| e.into())
+    .map(|q| {
+        q.iter()
+            .filter_map(|s| {
+                // The `default` table is not used
+                if s != "default" {
+                    Some(s.clone())
+                } else {
+                    None
+                }
+            })
+            .collect()
+    })
 }
 
 pub fn table_summary(
@@ -181,6 +193,77 @@ pub fn duplicate_objects_summary(db_path: PathBuf) -> (usize, usize, usize, usiz
 pub fn compact(db_path: PathBuf) -> anyhow::Result<()> {
     let perpetual = Arc::new(AuthorityPerpetualTables::open(&db_path, None));
     AuthorityStorePruner::compact(&perpetual)?;
+    Ok(())
+}
+
+pub async fn prune_objects(db_path: PathBuf) -> anyhow::Result<()> {
+    let perpetual_db = Arc::new(AuthorityPerpetualTables::open(&db_path.join("store"), None));
+    let checkpoint_store = Arc::new(CheckpointStore::open_tables_read_write(
+        db_path.join("checkpoints"),
+        MetricConf::default(),
+        None,
+        None,
+    ));
+    let rpc_index = RpcIndexStore::new_without_init(&db_path);
+    let highest_pruned_checkpoint = checkpoint_store.get_highest_pruned_checkpoint_seq_number()?;
+    let latest_checkpoint = checkpoint_store.get_highest_executed_checkpoint()?;
+    info!(
+        "Latest executed checkpoint sequence num: {}",
+        latest_checkpoint.map(|x| x.sequence_number).unwrap_or(0)
+    );
+    info!("Highest pruned checkpoint: {}", highest_pruned_checkpoint);
+    let metrics = AuthorityStorePruningMetrics::new(&Registry::default());
+    let lock_table = Arc::new(RwLockTable::new(1));
+    info!("Pruning setup for db at path: {:?}", db_path.display());
+    let pruning_config = AuthorityStorePruningConfig {
+        num_epochs_to_retain: 0,
+        ..Default::default()
+    };
+    info!("Starting object pruning");
+    AuthorityStorePruner::prune_objects_for_eligible_epochs(
+        &perpetual_db,
+        &checkpoint_store,
+        Some(&rpc_index),
+        &lock_table,
+        pruning_config,
+        metrics,
+        usize::MAX,
+        EPOCH_DURATION_MS_FOR_TESTING,
+    )
+    .await?;
+    Ok(())
+}
+
+pub async fn prune_checkpoints(db_path: PathBuf) -> anyhow::Result<()> {
+    let perpetual_db = Arc::new(AuthorityPerpetualTables::open(&db_path.join("store"), None));
+    let checkpoint_store = Arc::new(CheckpointStore::open_tables_read_write(
+        db_path.join("checkpoints"),
+        MetricConf::default(),
+        None,
+        None,
+    ));
+    let rpc_index = RpcIndexStore::new_without_init(&db_path);
+    let metrics = AuthorityStorePruningMetrics::new(&Registry::default());
+    let lock_table = Arc::new(RwLockTable::new(1));
+    info!("Pruning setup for db at path: {:?}", db_path.display());
+    let pruning_config = AuthorityStorePruningConfig {
+        num_epochs_to_retain_for_checkpoints: Some(1),
+        ..Default::default()
+    };
+    info!("Starting txns and effects pruning");
+    let archive_readers = ArchiveReaderBalancer::default();
+    AuthorityStorePruner::prune_checkpoints_for_eligible_epochs(
+        &perpetual_db,
+        &checkpoint_store,
+        Some(&rpc_index),
+        &lock_table,
+        pruning_config,
+        metrics,
+        usize::MAX,
+        archive_readers,
+        EPOCH_DURATION_MS_FOR_TESTING,
+    )
+    .await?;
     Ok(())
 }
 

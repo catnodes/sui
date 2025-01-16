@@ -1,22 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-	useGetValidatorsApy,
-	formatPercentageDisplay,
-	calculateStakeShare,
-	useGetSystemState,
-} from '@mysten/core';
-import { ArrowRight16 } from '@mysten/icons';
-import cl from 'classnames';
-import { useState, useMemo } from 'react';
-
-import { ValidatorListItem } from './ValidatorListItem';
-import { Button } from '_app/shared/ButtonUI';
 import { Content, Menu } from '_app/shared/bottom-menu-layout';
+import { Button } from '_app/shared/ButtonUI';
 import { Text } from '_app/shared/text';
 import Alert from '_components/alert';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
+import { ampli } from '_src/shared/analytics/ampli';
+import { calculateStakeShare, formatPercentageDisplay, useGetValidatorsApy } from '@mysten/core';
+import { useSuiClientQuery } from '@mysten/dapp-kit';
+import { ArrowRight16 } from '@mysten/icons';
+import cl from 'clsx';
+import { useMemo, useState } from 'react';
+
+import { ValidatorListItem } from './ValidatorListItem';
 
 type SortKeys = 'name' | 'stakeShare' | 'apy';
 const sortKeys: Record<SortKeys, string> = {
@@ -25,16 +22,24 @@ const sortKeys: Record<SortKeys, string> = {
 	apy: 'APY',
 };
 
+type Validator = {
+	name: string;
+	address: string;
+	apy: number | null;
+	isApyApproxZero?: boolean;
+	stakeShare: number;
+};
+
 export function SelectValidatorCard() {
-	const [selectedValidator, setSelectedValidator] = useState<null | string>(null);
+	const [selectedValidator, setSelectedValidator] = useState<Validator | null>(null);
 	const [sortKey, setSortKey] = useState<SortKeys | null>(null);
 	const [sortAscending, setSortAscending] = useState(true);
-	const { data, isLoading, isError } = useGetSystemState();
+	const { data, isPending, isError } = useSuiClientQuery('getLatestSuiSystemState');
 
 	const { data: rollingAverageApys } = useGetValidatorsApy();
 
-	const selectValidator = (address: string) => {
-		setSelectedValidator((state) => (state !== address ? address : null));
+	const selectValidator = (validator: Validator) => {
+		setSelectedValidator((state) => (state?.address !== validator.address ? validator : null));
 	};
 
 	const handleSortByKey = (key: SortKeys) => {
@@ -87,7 +92,7 @@ export function SelectValidatorCard() {
 		return sortedAsc;
 	}, [validatorsRandomOrder, sortAscending, rollingAverageApys, totalStake, sortKey]);
 
-	if (isLoading) {
+	if (isPending) {
 		return (
 			<div className="p-2 w-full flex justify-center items-center h-full">
 				<LoadingIndicator />
@@ -106,7 +111,7 @@ export function SelectValidatorCard() {
 	}
 
 	return (
-		<div className="flex flex-col w-full -my-5">
+		<div className="flex flex-col w-full h-full -my-5">
 			<Content className="flex flex-col w-full items-center">
 				<div className="flex flex-col w-full items-center -top-5 bg-white sticky pt-5 pb-2.5 z-50 mt-0">
 					<div className="flex items-start w-full mb-2">
@@ -151,12 +156,13 @@ export function SelectValidatorCard() {
 					{data &&
 						validatorList.map((validator) => (
 							<div
+								data-testid="validator-list-item"
 								className="cursor-pointer w-full relative"
 								key={validator.address}
-								onClick={() => selectValidator(validator.address)}
+								onClick={() => selectValidator(validator)}
 							>
 								<ValidatorListItem
-									selected={selectedValidator === validator.address}
+									selected={selectedValidator?.address === validator.address}
 									validatorAddress={validator.address}
 									value={formatPercentageDisplay(
 										!sortKey || sortKey === 'name' ? null : validator[sortKey],
@@ -171,9 +177,17 @@ export function SelectValidatorCard() {
 			{selectedValidator && (
 				<Menu stuckClass="staked-cta" className="w-full px-0 pb-5 mx-0 -bottom-5">
 					<Button
+						data-testid="select-validator-cta"
 						size="tall"
 						variant="primary"
-						to={`/stake/new?address=${encodeURIComponent(selectedValidator)}`}
+						to={`/stake/new?address=${encodeURIComponent(selectedValidator.address)}`}
+						onClick={() =>
+							ampli.selectedValidator({
+								validatorName: selectedValidator.name,
+								validatorAddress: selectedValidator.address,
+								validatorAPY: selectedValidator.apy || 0,
+							})
+						}
 						text="Select Amount"
 						after={<ArrowRight16 />}
 					/>

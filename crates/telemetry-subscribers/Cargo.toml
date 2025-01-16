@@ -9,18 +9,29 @@ edition = "2021"
 publish = false
 
 [dependencies]
-console-subscriber = { version = "0.1.6", optional = true }
-crossterm = "0.25.0"
-once_cell = "1.13.0"
-prometheus = "0.13.3"
-tracing = "0.1.37"
-tracing-appender = "0.2.2"
-tracing-subscriber = { version = "0.3.15", default-features = false, features = ["std", "smallvec", "fmt", "ansi", "time", "json", "registry", "env-filter"] }
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
+atomic_float.workspace = true
+console-subscriber.workspace = true
+crossterm.workspace = true
+once_cell.workspace = true
+prometheus.workspace = true
+tracing.workspace = true
+tracing-appender.workspace = true
+tracing-subscriber.workspace = true
+opentelemetry = { version = "0.25.0" }
+opentelemetry_sdk = { version = "0.25.0", features = ["rt-tokio"] }
+opentelemetry-otlp = { version = "0.25.0", features = ["grpc-tonic"] }
+tracing-opentelemetry = { version = "0.26.0" }
+opentelemetry-proto = { version = "0.25" }
+tokio = { workspace = true, features = ["full"] }
+futures.workspace = true
+clap.workspace = true
+bytes.workspace = true
+bytes-varint = { version = "1" }
 
-[features]
-default = []
-tokio-console = ["console-subscriber"]
+# must use same version as opentelemetry for tonic and prost, so we can't use from
+# workspace
+tonic = { version = "0.12.3" }
+prost = "0.13"
 
 [dev-dependencies]
-camino = "1.0.9"
+camino.workspace = true

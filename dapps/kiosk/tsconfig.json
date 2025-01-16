@@ -20,9 +20,5 @@
 		"noFallthroughCasesInSwitch": true
 	},
 	"include": ["src"],
-	"references": [
-		{ "path": "./tsconfig.node.json" },
-		{ "path": "../../sdk/typescript" },
-		{ "path": "../../sdk/wallet-adapter/wallet-kit" }
-	]
+	"references": [{ "path": "./tsconfig.node.json" }]
 }

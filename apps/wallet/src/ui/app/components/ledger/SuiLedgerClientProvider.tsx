@@ -25,7 +25,6 @@ const SuiLedgerClientContext = createContext<SuiLedgerClientContextValue | undef
 
 export function SuiLedgerClientProvider({ children }: SuiLedgerClientProviderProps) {
 	const [suiLedgerClient, setSuiLedgerClient] = useState<SuiLedgerClient>();
-
 	const resetSuiLedgerClient = useCallback(async () => {
 		await suiLedgerClient?.transport.close();
 		setSuiLedgerClient(undefined);
@@ -55,7 +54,6 @@ export function SuiLedgerClientProvider({ children }: SuiLedgerClientProviderPro
 		},
 		[resetSuiLedgerClient],
 	);
-
 	const contextValue: SuiLedgerClientContextValue = useMemo(() => {
 		return {
 			suiLedgerClient,

@@ -27,6 +27,8 @@ const textStyles = cva([], {
 			pSubtitleSmall: 'text-pSubtitleSmall',
 		},
 		color: {
+			black: 'text-black',
+			white: 'text-white',
 			'gray-100': 'text-gray-100',
 			'gray-90': 'text-gray-90',
 			'gray-85': 'text-gray-85',
@@ -43,6 +45,7 @@ const textStyles = cva([], {
 			'steel-darker': 'text-steel-darker',
 			hero: 'text-hero',
 			'hero-dark': 'text-hero-dark',
+			'hero-darkest': 'text-hero-darkest',
 			'success-dark': 'text-success-dark',
 			'issue-dark': 'text-issue-dark',
 		},
@@ -58,6 +61,9 @@ const textStyles = cva([], {
 			true: 'font-mono',
 			false: 'font-sans',
 		},
+		nowrap: {
+			true: 'whitespace-nowrap',
+		},
 	},
 	defaultVariants: {
 		weight: 'medium',
@@ -68,11 +74,12 @@ const textStyles = cva([], {
 export interface TextProps extends VariantProps<typeof textStyles> {
 	children: ReactNode;
 	title?: string;
+	className?: string;
 }
 
-export function Text({ children, title, ...styleProps }: TextProps) {
+export function Text({ children, title, className, ...styleProps }: TextProps) {
 	return (
-		<div title={title} className={textStyles(styleProps)}>
+		<div title={title} className={textStyles({ ...styleProps, className })}>
 			{children}
 		</div>
 	);

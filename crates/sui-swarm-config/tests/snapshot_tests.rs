@@ -52,7 +52,7 @@ fn genesis_config_snapshot_matches() {
 fn populated_genesis_snapshot_matches() {
     let genesis_config = GenesisConfig::for_local_testing();
     let (_account_keys, allocations) = genesis_config
-        .generate_accounts(&mut StdRng::from_seed([0; 32]))
+        .generate_accounts(StdRng::from_seed([0; 32]))
         .unwrap();
     let mut rng = StdRng::from_seed([0; 32]);
     let key: AuthorityKeyPair = get_key_pair_from_rng(&mut rng).1;
@@ -118,7 +118,7 @@ fn network_config_snapshot_matches() {
         .rng(rng)
         .build();
     // TODO: Inject static temp path and port numbers, instead of clearing them.
-    for mut validator_config in &mut network_config.validator_configs {
+    for validator_config in &mut network_config.validator_configs {
         validator_config.db_path = PathBuf::from("/tmp/foo/");
         validator_config.network_address = Multiaddr::empty();
         let fake_socket = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 1);
@@ -127,29 +127,8 @@ fn network_config_snapshot_matches() {
         validator_config.p2p_config.listen_address = fake_socket;
         validator_config.p2p_config.external_address = None;
         validator_config.admin_interface_port = 8888;
-        let metrics_addr: Multiaddr = "/ip4/127.0.0.1/tcp/1234".parse().unwrap();
-        let primary_network_admin_server_port = 5678;
-        let worker_network_admin_server_base_port = 8765;
         if let Some(consensus_config) = validator_config.consensus_config.as_mut() {
-            consensus_config.address = Multiaddr::empty();
             consensus_config.db_path = PathBuf::from("/tmp/foo/");
-            consensus_config.internal_worker_address = Some(Multiaddr::empty());
-            consensus_config
-                .narwhal_config
-                .consensus_api_grpc
-                .socket_addr = Multiaddr::empty();
-            consensus_config
-                .narwhal_config
-                .prometheus_metrics
-                .socket_addr = metrics_addr;
-            consensus_config
-                .narwhal_config
-                .network_admin_server
-                .primary_network_admin_server_port = primary_network_admin_server_port;
-            consensus_config
-                .narwhal_config
-                .network_admin_server
-                .worker_network_admin_server_base_port = worker_network_admin_server_base_port;
         }
     }
     assert_yaml_snapshot!(network_config, {

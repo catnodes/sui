@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use duration_str::parse;
+use std::fmt::Formatter;
 use std::{str::FromStr, time::Duration};
 
 pub mod bench_driver;
@@ -9,7 +10,7 @@ pub mod driver;
 use comfy_table::{Cell, Color, ContentArrangement, Row, Table};
 use hdrhistogram::{serialization::Serializer, Histogram};
 
-#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize, Eq, PartialEq)]
 pub enum Interval {
     Count(u64),
     Time(tokio::time::Duration),
@@ -30,9 +31,24 @@ impl FromStr for Interval {
         } else if let Ok(d) = parse(s) {
             Ok(Interval::Time(d))
         } else if "unbounded" == s {
-            Ok(Interval::Time(tokio::time::Duration::MAX))
+            Ok(Interval::Time(Duration::MAX))
         } else {
             Err("Required integer number of cycles or time duration".to_string())
+        }
+    }
+}
+
+impl std::fmt::Display for Interval {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Interval::Count(count) => f.write_str(format!("{}", count).as_str()),
+            Interval::Time(d) => {
+                if *d == Duration::MAX {
+                    f.write_str("unbounded")
+                } else {
+                    f.write_str(format!("{}sec", d.as_secs()).as_str())
+                }
+            }
         }
     }
 }
@@ -42,6 +58,14 @@ impl FromStr for Interval {
 #[derive(Debug)]
 pub struct HistogramWrapper {
     histogram: Histogram<u64>,
+}
+
+impl Default for HistogramWrapper {
+    fn default() -> Self {
+        Self {
+            histogram: Histogram::new(0).unwrap(),
+        }
+    }
 }
 
 impl serde::Serialize for HistogramWrapper {
@@ -95,11 +119,13 @@ impl StressStats {
 }
 
 /// Stores the final statistics of the test run.
-#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Default)]
 pub struct BenchmarkStats {
     pub duration: Duration,
     /// Number of transactions that ended in an error
     pub num_error_txes: u64,
+    /// Number of transactions that ended in an error but were expected
+    pub num_expected_error_txes: u64,
     /// Number of transactions that were executed successfully
     pub num_success_txes: u64,
     /// Total number of commands in transactions that executed successfully
@@ -113,6 +139,7 @@ impl BenchmarkStats {
     pub fn update(&mut self, duration: Duration, sample_stat: &BenchmarkStats) {
         self.duration = duration;
         self.num_error_txes += sample_stat.num_error_txes;
+        self.num_expected_error_txes += sample_stat.num_expected_error_txes;
         self.num_success_txes += sample_stat.num_success_txes;
         self.num_success_cmds += sample_stat.num_success_cmds;
         self.total_gas_used += sample_stat.total_gas_used;
@@ -131,6 +158,7 @@ impl BenchmarkStats {
                 "tps",
                 "cps",
                 "error%",
+                "expected error%",
                 "latency (min)",
                 "latency (p50)",
                 "latency (p99)",
@@ -144,6 +172,10 @@ impl BenchmarkStats {
         row.add_cell(Cell::new(
             (100 * self.num_error_txes) as f32
                 / (self.num_error_txes + self.num_success_txes) as f32,
+        ));
+        row.add_cell(Cell::new(
+            (100 * self.num_expected_error_txes) as f32
+                / (self.num_expected_error_txes + self.num_success_txes) as f32,
         ));
         row.add_cell(Cell::new(self.latency_ms.histogram.min()));
         row.add_cell(Cell::new(self.latency_ms.histogram.value_at_quantile(0.5)));

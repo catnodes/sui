@@ -1,66 +1,67 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { ArrowShowAndHideDown12 } from '@mysten/icons';
-import cl from 'classnames';
-import { AnimatePresence, motion } from 'framer-motion';
-import { useState } from 'react';
+import { ChevronDown12, ChevronRight12 } from '@mysten/icons';
+import * as CollapsiblePrimitive from '@radix-ui/react-collapsible';
+import cn from 'clsx';
+import { useState, type ReactNode } from 'react';
 
-import type { ReactNode } from 'react';
-
-type CollapseProps = {
+interface CollapsibleProps {
 	title: string;
-	initialIsOpen?: boolean;
+	defaultOpen?: boolean;
 	children: ReactNode | ReactNode[];
-};
+	shade?: 'lighter' | 'darker';
+	isOpen?: boolean;
+	onOpenChange?: (isOpen: boolean) => void;
+}
 
-export function Collapse({ title, children, initialIsOpen = false }: CollapseProps) {
-	const [isOpen, setIsOpen] = useState(initialIsOpen);
+export function Collapsible({
+	title,
+	children,
+	defaultOpen,
+	isOpen,
+	onOpenChange,
+	shade = 'lighter',
+}: CollapsibleProps) {
+	const [open, setOpen] = useState(isOpen ?? defaultOpen ?? false);
+
+	const handleOpenChange = (isOpen: boolean) => {
+		setOpen(isOpen);
+		onOpenChange?.(isOpen);
+	};
+
 	return (
-		<div className="flex flex-nowrap flex-col items-stretch">
-			<div
-				className={cl(
-					'group cursor-pointer text-steel-darker hover:text-hero',
-					'ease-ease-in-out-cubic duration-200',
-					'border-0 border-b border-solid border-b-gray-45 hover:border-b-hero',
-					'flex flex-nowrap flex-row pb-2',
-				)}
-				onClick={() => setIsOpen(!isOpen)}
-			>
-				<div className="flex-1 truncate font-semibold text-caption uppercase tracking-wider">
+		<CollapsiblePrimitive.Root
+			className="flex flex-shrink-0 justify-start flex-col w-full gap-3"
+			open={isOpen ?? open}
+			onOpenChange={handleOpenChange}
+		>
+			<CollapsiblePrimitive.Trigger className="flex items-center gap-2 w-full bg-transparent border-none p-0 cursor-pointer group">
+				<div
+					className={cn('text-captionSmall font-semibold uppercase group-hover:text-hero', {
+						'text-steel': shade === 'lighter',
+						'text-steel-darker': shade === 'darker',
+					})}
+				>
 					{title}
 				</div>
-				<ArrowShowAndHideDown12
-					className={cl(
-						'text-steel group-hover:text-hero text-caption',
-						'ease-ease-in-out-cubic duration-200',
-						!isOpen && '-rotate-90',
-					)}
+				<div
+					className={cn('h-px group-hover:bg-hero flex-1', {
+						'bg-steel': shade === 'darker',
+						'bg-gray-45 group-hover:bg-steel': shade === 'lighter',
+					})}
 				/>
-			</div>
-			<AnimatePresence initial={false}>
-				{isOpen ? (
-					<motion.div
-						initial={{ height: 0, opacity: 0 }}
-						animate={{
-							height: 'auto',
-							opacity: 1,
-						}}
-						transition={{ duration: 0.2, ease: [0.65, 0, 0.35, 1] }}
-						exit={{
-							height: 0,
-							opacity: 0,
-							transition: {
-								ease: [0.65, 0, 0.35, 1],
-								duration: 0.1,
-								height: { delay: 0.1 },
-							},
-						}}
-					>
-						<div className="pt-3">{children}</div>
-					</motion.div>
-				) : null}
-			</AnimatePresence>
-		</div>
+				<div
+					className={cn('group-hover:text-hero inline-flex', {
+						'text-steel': shade === 'darker',
+						'text-gray-45': shade === 'lighter',
+					})}
+				>
+					{open ? <ChevronDown12 /> : <ChevronRight12 />}
+				</div>
+			</CollapsiblePrimitive.Trigger>
+
+			<CollapsiblePrimitive.Content>{children}</CollapsiblePrimitive.Content>
+		</CollapsiblePrimitive.Root>
 	);
 }

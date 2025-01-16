@@ -1,136 +1,44 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
 use crate::metrics::{
     DefaultMetricsCallbackProvider, MetricsCallbackProvider, MetricsHandler,
     GRPC_ENDPOINT_PATH_HEADER,
 };
 use crate::{
     config::Config,
-    multiaddr::{parse_dns, parse_ip4, parse_ip6, Multiaddr, Protocol},
+    multiaddr::{Multiaddr, Protocol},
 };
 use eyre::{eyre, Result};
-use futures::FutureExt;
+use std::convert::Infallible;
 use std::task::{Context, Poll};
-use std::{convert::Infallible, net::SocketAddr};
-use tokio::net::{TcpListener, ToSocketAddrs};
-use tokio_stream::wrappers::TcpListenerStream;
+use tokio_rustls::rustls::ServerConfig;
 use tonic::codegen::http::HeaderValue;
 use tonic::{
     body::BoxBody,
-    codegen::{
-        http::{Request, Response},
-        BoxFuture,
-    },
-    transport::{server::Router, Body, NamedService},
+    codegen::http::{Request, Response},
+    server::NamedService,
 };
-use tower::{
-    layer::util::{Identity, Stack},
-    limit::GlobalConcurrencyLimitLayer,
-    load_shed::LoadShedLayer,
-    util::Either,
-    Layer, Service, ServiceBuilder,
-};
-use tower_http::classify::{GrpcErrorsAsFailures, SharedClassifier};
+use tower::{Layer, Service, ServiceBuilder};
 use tower_http::propagate_header::PropagateHeaderLayer;
 use tower_http::set_header::SetRequestHeaderLayer;
-use tower_http::trace::{DefaultMakeSpan, DefaultOnBodyChunk, DefaultOnEos, TraceLayer};
+use tower_http::trace::TraceLayer;
 
 pub struct ServerBuilder<M: MetricsCallbackProvider = DefaultMetricsCallbackProvider> {
-    router: Router<WrapperService<M>>,
+    config: Config,
+    metrics_provider: M,
+    router: tonic::service::Routes,
     health_reporter: tonic_health::server::HealthReporter,
 }
 
-type AddPathToHeaderFunction = fn(&Request<Body>) -> Option<HeaderValue>;
-
-type WrapperService<M> = Stack<
-    Stack<
-        PropagateHeaderLayer,
-        Stack<
-            TraceLayer<
-                SharedClassifier<GrpcErrorsAsFailures>,
-                DefaultMakeSpan,
-                MetricsHandler<M>,
-                MetricsHandler<M>,
-                DefaultOnBodyChunk,
-                DefaultOnEos,
-                MetricsHandler<M>,
-            >,
-            Stack<
-                SetRequestHeaderLayer<AddPathToHeaderFunction>,
-                Stack<
-                    RequestLifetimeLayer<M>,
-                    Stack<
-                        Either<LoadShedLayer, Identity>,
-                        Stack<Either<GlobalConcurrencyLimitLayer, Identity>, Identity>,
-                    >,
-                >,
-            >,
-        >,
-    >,
-    Identity,
->;
-
 impl<M: MetricsCallbackProvider> ServerBuilder<M> {
     pub fn from_config(config: &Config, metrics_provider: M) -> Self {
-        let mut builder = tonic::transport::server::Server::builder();
-
-        if let Some(limit) = config.concurrency_limit_per_connection {
-            builder = builder.concurrency_limit_per_connection(limit);
-        }
-
-        if let Some(timeout) = config.request_timeout {
-            builder = builder.timeout(timeout);
-        }
-
-        if let Some(tcp_nodelay) = config.tcp_nodelay {
-            builder = builder.tcp_nodelay(tcp_nodelay);
-        }
-
-        let load_shed = config
-            .load_shed
-            .unwrap_or_default()
-            .then_some(tower::load_shed::LoadShedLayer::new());
-
-        let metrics = MetricsHandler::new(metrics_provider.clone());
-
-        let request_metrics = TraceLayer::new_for_grpc()
-            .on_request(metrics.clone())
-            .on_response(metrics.clone())
-            .on_failure(metrics);
-
-        let global_concurrency_limit = config
-            .global_concurrency_limit
-            .map(tower::limit::GlobalConcurrencyLimitLayer::new);
-
-        fn add_path_to_request_header(request: &Request<Body>) -> Option<HeaderValue> {
-            let path = request.uri().path();
-            Some(HeaderValue::from_str(path).unwrap())
-        }
-
-        let layer = ServiceBuilder::new()
-            .option_layer(global_concurrency_limit)
-            .option_layer(load_shed)
-            .layer(RequestLifetimeLayer { metrics_provider })
-            .layer(SetRequestHeaderLayer::overriding(
-                GRPC_ENDPOINT_PATH_HEADER.clone(),
-                add_path_to_request_header as AddPathToHeaderFunction,
-            ))
-            .layer(request_metrics)
-            .layer(PropagateHeaderLayer::new(GRPC_ENDPOINT_PATH_HEADER.clone()))
-            .into_inner();
-
         let (health_reporter, health_service) = tonic_health::server::health_reporter();
-        let router = builder
-            .initial_stream_window_size(config.http2_initial_stream_window_size)
-            .initial_connection_window_size(config.http2_initial_connection_window_size)
-            .http2_keepalive_interval(config.http2_keepalive_interval)
-            .http2_keepalive_timeout(config.http2_keepalive_timeout)
-            .max_concurrent_streams(config.http2_max_concurrent_streams)
-            .tcp_keepalive(config.tcp_keepalive)
-            .layer(layer)
-            .add_service(health_service);
+        let router = tonic::service::Routes::new(health_service);
 
         Self {
+            config: config.to_owned(),
+            metrics_provider,
             router,
             health_reporter,
         }
@@ -143,7 +51,7 @@ impl<M: MetricsCallbackProvider> ServerBuilder<M> {
     /// Add a new service to this Server.
     pub fn add_service<S>(mut self, svc: S) -> Self
     where
-        S: Service<Request<Body>, Response = Response<BoxBody>, Error = Infallible>
+        S: Service<Request<BoxBody>, Response = Response<BoxBody>, Error = Infallible>
             + NamedService
             + Clone
             + Send
@@ -154,95 +62,96 @@ impl<M: MetricsCallbackProvider> ServerBuilder<M> {
         self
     }
 
-    pub async fn bind(self, addr: &Multiaddr) -> Result<Server> {
-        let mut iter = addr.iter();
+    pub async fn bind(self, addr: &Multiaddr, tls_config: Option<ServerConfig>) -> Result<Server> {
+        let http_config = self
+            .config
+            .http_config()
+            // Temporarily continue allowing clients to connection without TLS even when the server
+            // is configured with a tls_config
+            .allow_insecure(true);
 
-        let (tx_cancellation, rx_cancellation) = tokio::sync::oneshot::channel();
-        let rx_cancellation = rx_cancellation.map(|_| ());
-        let (local_addr, server): (Multiaddr, BoxFuture<(), tonic::transport::Error>) =
-            match iter.next().ok_or_else(|| eyre!("malformed addr"))? {
-                Protocol::Dns(_) => {
-                    let (dns_name, tcp_port, _http_or_https) = parse_dns(addr)?;
-                    let (local_addr, incoming) =
-                        tcp_listener_and_update_multiaddr(addr, (dns_name.as_ref(), tcp_port))
-                            .await?;
-                    let server = Box::pin(
-                        self.router
-                            .serve_with_incoming_shutdown(incoming, rx_cancellation),
-                    );
-                    (local_addr, server)
-                }
-                Protocol::Ip4(_) => {
-                    let (socket_addr, _http_or_https) = parse_ip4(addr)?;
-                    let (local_addr, incoming) =
-                        tcp_listener_and_update_multiaddr(addr, socket_addr).await?;
-                    let server = Box::pin(
-                        self.router
-                            .serve_with_incoming_shutdown(incoming, rx_cancellation),
-                    );
-                    (local_addr, server)
-                }
-                Protocol::Ip6(_) => {
-                    let (socket_addr, _http_or_https) = parse_ip6(addr)?;
-                    let (local_addr, incoming) =
-                        tcp_listener_and_update_multiaddr(addr, socket_addr).await?;
-                    let server = Box::pin(
-                        self.router
-                            .serve_with_incoming_shutdown(incoming, rx_cancellation),
-                    );
-                    (local_addr, server)
-                }
-                // Protocol::Memory(_) => todo!(),
-                #[cfg(unix)]
-                Protocol::Unix(_) => {
-                    let (path, _http_or_https) = crate::multiaddr::parse_unix(addr)?;
-                    let uds = tokio::net::UnixListener::bind(path.as_ref())?;
-                    let uds_stream = tokio_stream::wrappers::UnixListenerStream::new(uds);
-                    let local_addr = addr.to_owned();
-                    let server = Box::pin(
-                        self.router
-                            .serve_with_incoming_shutdown(uds_stream, rx_cancellation),
-                    );
-                    (local_addr, server)
-                }
-                unsupported => return Err(eyre!("unsupported protocol {unsupported}")),
-            };
+        let request_timeout = self.config.request_timeout;
+        let metrics_provider = self.metrics_provider;
+        let metrics = MetricsHandler::new(metrics_provider.clone());
+        let request_metrics = TraceLayer::new_for_grpc()
+            .on_request(metrics.clone())
+            .on_response(metrics.clone())
+            .on_failure(metrics);
 
+        fn add_path_to_request_header<T>(request: &Request<T>) -> Option<HeaderValue> {
+            let path = request.uri().path();
+            Some(HeaderValue::from_str(path).unwrap())
+        }
+
+        let limiting_layers = ServiceBuilder::new()
+            .option_layer(
+                self.config
+                    .load_shed
+                    .unwrap_or_default()
+                    .then_some(tower::load_shed::LoadShedLayer::new()),
+            )
+            .option_layer(
+                self.config
+                    .global_concurrency_limit
+                    .map(tower::limit::GlobalConcurrencyLimitLayer::new),
+            );
+        let route_layers = ServiceBuilder::new()
+            .map_request(|mut request: http::Request<_>| {
+                if let Some(connect_info) = request.extensions().get::<sui_http::ConnectInfo>() {
+                    let tonic_connect_info = tonic::transport::server::TcpConnectInfo {
+                        local_addr: Some(connect_info.local_addr),
+                        remote_addr: Some(connect_info.remote_addr),
+                    };
+                    request.extensions_mut().insert(tonic_connect_info);
+                }
+                request
+            })
+            .layer(RequestLifetimeLayer { metrics_provider })
+            .layer(SetRequestHeaderLayer::overriding(
+                GRPC_ENDPOINT_PATH_HEADER.clone(),
+                add_path_to_request_header,
+            ))
+            .layer(request_metrics)
+            .layer(PropagateHeaderLayer::new(GRPC_ENDPOINT_PATH_HEADER.clone()))
+            .layer_fn(move |service| {
+                crate::grpc_timeout::GrpcTimeout::new(service, request_timeout)
+            });
+
+        let mut builder = sui_http::Builder::new().config(http_config);
+
+        if let Some(tls_config) = tls_config {
+            builder = builder.tls_config(tls_config);
+        }
+
+        let server_handle = builder
+            .serve(
+                addr,
+                limiting_layers.service(self.router.into_axum_router().layer(route_layers)),
+            )
+            .map_err(|e| eyre!(e))?;
+
+        let local_addr = update_tcp_port_in_multiaddr(addr, server_handle.local_addr().port());
         Ok(Server {
-            server,
-            cancel_handle: Some(tx_cancellation),
+            server: server_handle,
             local_addr,
             health_reporter: self.health_reporter,
         })
     }
 }
 
-async fn tcp_listener_and_update_multiaddr<T: ToSocketAddrs>(
-    address: &Multiaddr,
-    socket_addr: T,
-) -> Result<(Multiaddr, TcpListenerStream)> {
-    let (local_addr, incoming) = tcp_listener(socket_addr).await?;
-    let local_addr = update_tcp_port_in_multiaddr(address, local_addr.port());
-    Ok((local_addr, incoming))
-}
-
-async fn tcp_listener<T: ToSocketAddrs>(address: T) -> Result<(SocketAddr, TcpListenerStream)> {
-    let listener = TcpListener::bind(address).await?;
-    let local_addr = listener.local_addr()?;
-    let incoming = TcpListenerStream::new(listener);
-    Ok((local_addr, incoming))
-}
+/// TLS server name to use for the public Sui validator interface.
+pub const SUI_TLS_SERVER_NAME: &str = "sui";
 
 pub struct Server {
-    server: BoxFuture<(), tonic::transport::Error>,
-    cancel_handle: Option<tokio::sync::oneshot::Sender<()>>,
+    server: sui_http::ServerHandle,
     local_addr: Multiaddr,
     health_reporter: tonic_health::server::HealthReporter,
 }
 
 impl Server {
     pub async fn serve(self) -> Result<(), tonic::transport::Error> {
-        self.server.await
+        self.server.wait_for_shutdown().await;
+        Ok(())
     }
 
     pub fn local_addr(&self) -> &Multiaddr {
@@ -253,8 +162,8 @@ impl Server {
         self.health_reporter.clone()
     }
 
-    pub fn take_cancel_handle(&mut self) -> Option<tokio::sync::oneshot::Sender<()>> {
-        self.cancel_handle.take()
+    pub fn handle(&self) -> &sui_http::ServerHandle {
+        &self.server
     }
 }
 
@@ -278,8 +187,8 @@ mod test {
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
     use tonic::Code;
-    use tonic_health::proto::health_client::HealthClient;
-    use tonic_health::proto::HealthCheckRequest;
+    use tonic_health::pb::health_client::HealthClient;
+    use tonic_health::pb::HealthCheckRequest;
 
     #[test]
     fn document_multiaddr_limitation_for_unix_protocol() {
@@ -328,16 +237,14 @@ mod test {
         let address: Multiaddr = "/ip4/127.0.0.1/tcp/0/http".parse().unwrap();
         let config = Config::new();
 
-        let mut server = config
+        let server = config
             .server_builder_with_metrics(metrics.clone())
-            .bind(&address)
+            .bind(&address, None)
             .await
             .unwrap();
 
         let address = server.local_addr().to_owned();
-        let cancel_handle = server.take_cancel_handle().unwrap();
-        let server_handle = tokio::spawn(server.serve());
-        let channel = config.connect(&address).await.unwrap();
+        let channel = config.connect(&address, None).await.unwrap();
         let mut client = HealthClient::new(channel);
 
         client
@@ -347,8 +254,7 @@ mod test {
             .await
             .unwrap();
 
-        cancel_handle.send(()).unwrap();
-        server_handle.await.unwrap().unwrap();
+        server.server.shutdown().await;
 
         assert!(metrics.metrics_called.lock().unwrap().deref());
     }
@@ -391,16 +297,14 @@ mod test {
         let address: Multiaddr = "/ip4/127.0.0.1/tcp/0/http".parse().unwrap();
         let config = Config::new();
 
-        let mut server = config
+        let server = config
             .server_builder_with_metrics(metrics.clone())
-            .bind(&address)
+            .bind(&address, None)
             .await
             .unwrap();
 
         let address = server.local_addr().to_owned();
-        let cancel_handle = server.take_cancel_handle().unwrap();
-        let server_handle = tokio::spawn(server.serve());
-        let channel = config.connect(&address).await.unwrap();
+        let channel = config.connect(&address, None).await.unwrap();
         let mut client = HealthClient::new(channel);
 
         // Call the healthcheck for a service that doesn't exist
@@ -412,19 +316,16 @@ mod test {
             })
             .await;
 
-        cancel_handle.send(()).unwrap();
-        server_handle.await.unwrap().unwrap();
+        server.server.shutdown().await;
 
         assert!(metrics.metrics_called.lock().unwrap().deref());
     }
 
     async fn test_multiaddr(address: Multiaddr) {
         let config = Config::new();
-        let mut server = config.server_builder().bind(&address).await.unwrap();
-        let address = server.local_addr().to_owned();
-        let cancel_handle = server.take_cancel_handle().unwrap();
-        let server_handle = tokio::spawn(server.serve());
-        let channel = config.connect(&address).await.unwrap();
+        let server_handle = config.server_builder().bind(&address, None).await.unwrap();
+        let address = server_handle.local_addr().to_owned();
+        let channel = config.connect(&address, None).await.unwrap();
         let mut client = HealthClient::new(channel);
 
         client
@@ -434,8 +335,7 @@ mod test {
             .await
             .unwrap();
 
-        cancel_handle.send(()).unwrap();
-        server_handle.await.unwrap().unwrap();
+        server_handle.server.shutdown().await;
     }
 
     #[tokio::test]
@@ -453,24 +353,6 @@ mod test {
     #[tokio::test]
     async fn ip6() {
         let address: Multiaddr = "/ip6/::1/tcp/0/http".parse().unwrap();
-        test_multiaddr(address).await;
-    }
-
-    #[cfg(unix)]
-    #[tokio::test]
-    async fn unix() {
-        // Note that this only works when constructing a multiaddr by hand and not via the
-        // human-readable format
-        let path = "unix-domain-socket";
-        let address = Multiaddr::new_internal(multiaddr::multiaddr!(Unix(path), Http));
-        test_multiaddr(address).await;
-        std::fs::remove_file(path).unwrap();
-    }
-
-    #[should_panic]
-    #[tokio::test]
-    async fn missing_http_protocol() {
-        let address: Multiaddr = "/dns/localhost/tcp/0".parse().unwrap();
         test_multiaddr(address).await;
     }
 }

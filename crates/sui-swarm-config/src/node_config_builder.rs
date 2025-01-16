@@ -1,27 +1,33 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::genesis_config::{ValidatorGenesisConfig, ValidatorGenesisConfigBuilder};
-use crate::network_config::NetworkConfig;
-use fastcrypto::encoding::{Encoding, Hex};
-use fastcrypto::traits::KeyPair;
-use narwhal_config::{NetworkAdminServerParameters, PrometheusMetricsParameters};
 use std::net::SocketAddr;
 use std::path::PathBuf;
+use std::time::Duration;
+
+use fastcrypto::encoding::{Encoding, Hex};
+use fastcrypto::traits::KeyPair;
 use sui_config::node::{
     default_enable_index_processing, default_end_of_epoch_broadcast_channel_capacity,
-    AuthorityKeyPairWithPath, AuthorityStorePruningConfig, DBCheckpointConfig,
-    ExpensiveSafetyCheckConfig, Genesis, KeyPairWithPath, StateArchiveConfig,
+    AuthorityKeyPairWithPath, AuthorityOverloadConfig, AuthorityStorePruningConfig,
+    CheckpointExecutorConfig, DBCheckpointConfig, ExecutionCacheConfig, ExpensiveSafetyCheckConfig,
+    Genesis, KeyPairWithPath, StateArchiveConfig, StateSnapshotConfig,
     DEFAULT_GRPC_CONCURRENCY_LIMIT,
 };
-use sui_config::p2p::{P2pConfig, SeedPeer};
+use sui_config::node::{default_zklogin_oauth_providers, RunWithRange};
+use sui_config::p2p::{P2pConfig, SeedPeer, StateSyncConfig};
+use sui_config::verifier_signing_config::VerifierSigningConfig;
 use sui_config::{
     local_ip_utils, ConsensusConfig, NodeConfig, AUTHORITIES_DB_NAME, CONSENSUS_DB_NAME,
     FULL_NODE_DB_PATH,
 };
-use sui_protocol_config::SupportedProtocolVersions;
 use sui_types::crypto::{AuthorityKeyPair, AuthorityPublicKeyBytes, NetworkKeyPair, SuiKeyPair};
 use sui_types::multiaddr::Multiaddr;
+use sui_types::supported_protocol_versions::SupportedProtocolVersions;
+use sui_types::traffic_control::{PolicyConfig, RemoteFirewallConfig};
+
+use crate::genesis_config::{ValidatorGenesisConfig, ValidatorGenesisConfigBuilder};
+use crate::network_config::NetworkConfig;
 
 /// This builder contains information that's not included in ValidatorGenesisConfig for building
 /// a validator NodeConfig. It can be used to build either a genesis validator or a new validator.
@@ -30,11 +36,23 @@ pub struct ValidatorConfigBuilder {
     config_directory: Option<PathBuf>,
     supported_protocol_versions: Option<SupportedProtocolVersions>,
     force_unpruned_checkpoints: bool,
+    jwk_fetch_interval: Option<Duration>,
+    authority_overload_config: Option<AuthorityOverloadConfig>,
+    execution_cache_config: Option<ExecutionCacheConfig>,
+    data_ingestion_dir: Option<PathBuf>,
+    policy_config: Option<PolicyConfig>,
+    firewall_config: Option<RemoteFirewallConfig>,
+    max_submit_position: Option<usize>,
+    submit_delay_step_override_millis: Option<u64>,
+    state_accumulator_v2: bool,
 }
 
 impl ValidatorConfigBuilder {
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            state_accumulator_v2: true,
+            ..Default::default()
+        }
     }
 
     pub fn with_config_directory(mut self, config_directory: PathBuf) -> Self {
@@ -57,6 +75,54 @@ impl ValidatorConfigBuilder {
         self
     }
 
+    pub fn with_jwk_fetch_interval(mut self, i: Duration) -> Self {
+        self.jwk_fetch_interval = Some(i);
+        self
+    }
+
+    pub fn with_authority_overload_config(mut self, config: AuthorityOverloadConfig) -> Self {
+        self.authority_overload_config = Some(config);
+        self
+    }
+
+    pub fn with_execution_cache_config(mut self, config: ExecutionCacheConfig) -> Self {
+        self.execution_cache_config = Some(config);
+        self
+    }
+
+    pub fn with_data_ingestion_dir(mut self, path: PathBuf) -> Self {
+        self.data_ingestion_dir = Some(path);
+        self
+    }
+
+    pub fn with_policy_config(mut self, config: Option<PolicyConfig>) -> Self {
+        self.policy_config = config;
+        self
+    }
+
+    pub fn with_firewall_config(mut self, config: Option<RemoteFirewallConfig>) -> Self {
+        self.firewall_config = config;
+        self
+    }
+
+    pub fn with_max_submit_position(mut self, max_submit_position: usize) -> Self {
+        self.max_submit_position = Some(max_submit_position);
+        self
+    }
+
+    pub fn with_submit_delay_step_override_millis(
+        mut self,
+        submit_delay_step_override_millis: u64,
+    ) -> Self {
+        self.submit_delay_step_override_millis = Some(submit_delay_step_override_millis);
+        self
+    }
+
+    pub fn with_state_accumulator_v2_enabled(mut self, enabled: bool) -> Self {
+        self.state_accumulator_v2 = enabled;
+        self
+    }
+
     pub fn build(
         self,
         validator: ValidatorGenesisConfig,
@@ -71,31 +137,16 @@ impl ValidatorConfigBuilder {
             .join(key_path.clone());
 
         let network_address = validator.network_address;
-        let consensus_address = validator.consensus_address;
         let consensus_db_path = config_directory.join(CONSENSUS_DB_NAME).join(key_path);
-        let internal_worker_address = validator.consensus_internal_worker_address;
         let localhost = local_ip_utils::localhost_for_testing();
         let consensus_config = ConsensusConfig {
-            address: consensus_address,
             db_path: consensus_db_path,
-            internal_worker_address,
+            db_retention_epochs: None,
+            db_pruner_period_secs: None,
             max_pending_transactions: None,
-            max_submit_position: None,
-            submit_delay_step_override_millis: None,
-            narwhal_config: narwhal_config::Parameters {
-                network_admin_server: NetworkAdminServerParameters {
-                    primary_network_admin_server_port: local_ip_utils::get_available_port(
-                        &localhost,
-                    ),
-                    worker_network_admin_server_base_port: local_ip_utils::get_available_port(
-                        &localhost,
-                    ),
-                },
-                prometheus_metrics: PrometheusMetricsParameters {
-                    socket_addr: validator.narwhal_metrics_address,
-                },
-                ..Default::default()
-            },
+            max_submit_position: self.max_submit_position,
+            submit_delay_step_override_millis: self.submit_delay_step_override_millis,
+            parameters: Default::default(),
         };
 
         let p2p_config = P2pConfig {
@@ -106,14 +157,24 @@ impl ValidatorConfigBuilder {
                     .unwrap()
             }),
             external_address: Some(validator.p2p_address),
+            // Set a shorter timeout for checkpoint content download in tests, since
+            // checkpoint pruning also happens much faster, and network is local.
+            state_sync: Some(StateSyncConfig {
+                checkpoint_content_timeout_ms: Some(10_000),
+                ..Default::default()
+            }),
             ..Default::default()
         };
 
-        let mut pruning_config = AuthorityStorePruningConfig::validator_config();
+        let mut pruning_config = AuthorityStorePruningConfig::default();
         if self.force_unpruned_checkpoints {
-            pruning_config.num_epochs_to_retain_for_checkpoints = None;
+            pruning_config.set_num_epochs_to_retain_for_checkpoints(None);
         }
         let pruning_config = pruning_config;
+        let checkpoint_executor_config = CheckpointExecutorConfig {
+            data_ingestion_dir: self.data_ingestion_dir,
+            ..Default::default()
+        };
 
         NodeConfig {
             protocol_key_pair: AuthorityKeyPairWithPath::new(validator.key_pair),
@@ -128,7 +189,7 @@ impl ValidatorConfigBuilder {
                 .to_socket_addr()
                 .unwrap(),
             consensus_config: Some(consensus_config),
-            enable_event_processing: false,
+            remove_deprecated_tables: false,
             enable_index_processing: default_enable_index_processing(),
             genesis: sui_config::node::Genesis::new(genesis),
             grpc_load_shed: None,
@@ -137,19 +198,45 @@ impl ValidatorConfigBuilder {
             authority_store_pruning_config: pruning_config,
             end_of_epoch_broadcast_channel_capacity:
                 default_end_of_epoch_broadcast_channel_capacity(),
-            checkpoint_executor_config: Default::default(),
+            checkpoint_executor_config,
             metrics: None,
             supported_protocol_versions: self.supported_protocol_versions,
             db_checkpoint_config: Default::default(),
             indirect_objects_threshold: usize::MAX,
-            expensive_safety_check_config: ExpensiveSafetyCheckConfig::new_enable_all(),
+            // By default, expensive checks will be enabled in debug build, but not in release build.
+            expensive_safety_check_config: ExpensiveSafetyCheckConfig::default(),
             name_service_package_address: None,
             name_service_registry_id: None,
             name_service_reverse_registry_id: None,
             transaction_deny_config: Default::default(),
             certificate_deny_config: Default::default(),
             state_debug_dump_config: Default::default(),
-            state_archive_config: StateArchiveConfig::default(),
+            state_archive_write_config: StateArchiveConfig::default(),
+            state_archive_read_config: vec![],
+            state_snapshot_write_config: StateSnapshotConfig::default(),
+            indexer_max_subscriptions: Default::default(),
+            transaction_kv_store_read_config: Default::default(),
+            transaction_kv_store_write_config: None,
+            rpc: Some(sui_rpc_api::Config {
+                enable_experimental_rest_api: Some(true),
+                ..Default::default()
+            }),
+            jwk_fetch_interval_seconds: self
+                .jwk_fetch_interval
+                .map(|i| i.as_secs())
+                .unwrap_or(3600),
+            zklogin_oauth_providers: default_zklogin_oauth_providers(),
+            authority_overload_config: self.authority_overload_config.unwrap_or_default(),
+            execution_cache: self.execution_cache_config.unwrap_or_default(),
+            run_with_range: None,
+            jsonrpc_server_type: None,
+            policy_config: self.policy_config,
+            firewall_config: self.firewall_config,
+            state_accumulator_v2: self.state_accumulator_v2,
+            enable_soft_bundle: true,
+            enable_validator_tx_finalizer: true,
+            verifier_signing_config: VerifierSigningConfig::default(),
+            enable_db_write_stall: None,
         }
     }
 
@@ -181,6 +268,11 @@ pub struct FullnodeConfigBuilder {
     p2p_external_address: Option<Multiaddr>,
     p2p_listen_address: Option<SocketAddr>,
     network_key_pair: Option<KeyPairWithPath>,
+    run_with_range: Option<RunWithRange>,
+    policy_config: Option<PolicyConfig>,
+    fw_config: Option<RemoteFirewallConfig>,
+    data_ingestion_dir: Option<PathBuf>,
+    disable_pruning: bool,
 }
 
 impl FullnodeConfigBuilder {
@@ -212,6 +304,11 @@ impl FullnodeConfigBuilder {
 
     pub fn with_db_checkpoint_config(mut self, db_checkpoint_config: DBCheckpointConfig) -> Self {
         self.db_checkpoint_config = Some(db_checkpoint_config);
+        self
+    }
+
+    pub fn with_disable_pruning(mut self, disable_pruning: bool) -> Self {
+        self.disable_pruning = disable_pruning;
         self
     }
 
@@ -271,6 +368,28 @@ impl FullnodeConfigBuilder {
         self
     }
 
+    pub fn with_run_with_range(mut self, run_with_range: Option<RunWithRange>) -> Self {
+        if let Some(run_with_range) = run_with_range {
+            self.run_with_range = Some(run_with_range);
+        }
+        self
+    }
+
+    pub fn with_policy_config(mut self, config: Option<PolicyConfig>) -> Self {
+        self.policy_config = config;
+        self
+    }
+
+    pub fn with_fw_config(mut self, config: Option<RemoteFirewallConfig>) -> Self {
+        self.fw_config = config;
+        self
+    }
+
+    pub fn with_data_ingestion_dir(mut self, path: Option<PathBuf>) -> Self {
+        self.data_ingestion_dir = path;
+        self
+    }
+
     pub fn build<R: rand::RngCore + rand::CryptoRng>(
         self,
         rng: &mut R,
@@ -316,6 +435,12 @@ impl FullnodeConfigBuilder {
                     .p2p_external_address
                     .or(Some(validator_config.p2p_address.clone())),
                 seed_peers,
+                // Set a shorter timeout for checkpoint content download in tests, since
+                // checkpoint pruning also happens much faster, and network is local.
+                state_sync: Some(StateSyncConfig {
+                    checkpoint_content_timeout_ms: Some(10_000),
+                    ..Default::default()
+                }),
                 ..Default::default()
             }
         };
@@ -327,6 +452,17 @@ impl FullnodeConfigBuilder {
                 .unwrap_or_else(|| local_ip_utils::get_available_port(&ip));
             format!("{}:{}", ip, rpc_port).parse().unwrap()
         });
+
+        let checkpoint_executor_config = CheckpointExecutorConfig {
+            data_ingestion_dir: self.data_ingestion_dir,
+            ..Default::default()
+        };
+
+        let mut pruning_config = AuthorityStorePruningConfig::default();
+        if self.disable_pruning {
+            pruning_config.set_num_epochs_to_retain_for_checkpoints(None);
+            pruning_config.set_num_epochs_to_retain(u64::MAX);
+        };
 
         NodeConfig {
             protocol_key_pair: AuthorityKeyPairWithPath::new(validator_config.key_pair),
@@ -351,7 +487,7 @@ impl FullnodeConfigBuilder {
                 .unwrap_or(local_ip_utils::get_available_port(&localhost)),
             json_rpc_address: self.json_rpc_address.unwrap_or(json_rpc_address),
             consensus_config: None,
-            enable_event_processing: true, // This is unused.
+            remove_deprecated_tables: false,
             enable_index_processing: default_enable_index_processing(),
             genesis: self.genesis.unwrap_or(sui_config::node::Genesis::new(
                 network_config.genesis.clone(),
@@ -359,10 +495,10 @@ impl FullnodeConfigBuilder {
             grpc_load_shed: None,
             grpc_concurrency_limit: None,
             p2p_config,
-            authority_store_pruning_config: AuthorityStorePruningConfig::fullnode_config(),
+            authority_store_pruning_config: pruning_config,
             end_of_epoch_broadcast_channel_capacity:
                 default_end_of_epoch_broadcast_channel_capacity(),
-            checkpoint_executor_config: Default::default(),
+            checkpoint_executor_config,
             metrics: None,
             supported_protocol_versions: self.supported_protocol_versions,
             db_checkpoint_config: self.db_checkpoint_config.unwrap_or_default(),
@@ -376,7 +512,32 @@ impl FullnodeConfigBuilder {
             transaction_deny_config: Default::default(),
             certificate_deny_config: Default::default(),
             state_debug_dump_config: Default::default(),
-            state_archive_config: StateArchiveConfig::default(),
+            state_archive_write_config: StateArchiveConfig::default(),
+            state_archive_read_config: vec![],
+            state_snapshot_write_config: StateSnapshotConfig::default(),
+            indexer_max_subscriptions: Default::default(),
+            transaction_kv_store_read_config: Default::default(),
+            transaction_kv_store_write_config: Default::default(),
+            rpc: Some(sui_rpc_api::Config {
+                enable_experimental_rest_api: Some(true),
+                enable_indexing: Some(true),
+                ..Default::default()
+            }),
+            // note: not used by fullnodes.
+            jwk_fetch_interval_seconds: 3600,
+            zklogin_oauth_providers: default_zklogin_oauth_providers(),
+            authority_overload_config: Default::default(),
+            run_with_range: self.run_with_range,
+            jsonrpc_server_type: None,
+            policy_config: self.policy_config,
+            firewall_config: self.fw_config,
+            execution_cache: ExecutionCacheConfig::default(),
+            state_accumulator_v2: true,
+            enable_soft_bundle: true,
+            // This is a validator specific feature.
+            enable_validator_tx_finalizer: false,
+            verifier_signing_config: VerifierSigningConfig::default(),
+            enable_db_write_stall: None,
         }
     }
 }

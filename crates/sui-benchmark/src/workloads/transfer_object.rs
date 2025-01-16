@@ -8,11 +8,13 @@ use tracing::error;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use crate::drivers::Interval;
 use crate::system_state_observer::SystemStateObserver;
 use crate::workloads::payload::Payload;
 use crate::workloads::workload::WorkloadBuilder;
 use crate::workloads::workload::{
-    Workload, ESTIMATED_COMPUTATION_COST, MAX_GAS_FOR_TESTING, STORAGE_COST_PER_COIN,
+    ExpectedFailureType, Workload, ESTIMATED_COMPUTATION_COST, MAX_GAS_FOR_TESTING,
+    STORAGE_COST_PER_COIN,
 };
 use crate::workloads::{Gas, GasCoinConfig, WorkloadBuilderInfo, WorkloadParams};
 use crate::{ExecutionEffects, ValidatorProxy};
@@ -20,7 +22,7 @@ use sui_core::test_utils::make_transfer_object_transaction;
 use sui_types::{
     base_types::{ObjectRef, SuiAddress},
     crypto::{get_key_pair, AccountKeyPair},
-    transaction::VerifiedTransaction,
+    transaction::Transaction,
 };
 
 /// TODO: This should be the amount that is being transferred instead of MAX_GAS.
@@ -40,7 +42,7 @@ impl Payload for TransferObjectTestPayload {
     fn make_new_payload(&mut self, effects: &ExecutionEffects) {
         if !effects.is_ok() {
             effects.print_gas_summary();
-            error!("Transfer tx failed...");
+            error!("Transfer tx failed... Status: {:?}", effects.status());
         }
 
         let recipient = self.gas.iter().find(|x| x.1 != self.transfer_to).unwrap().1;
@@ -65,7 +67,7 @@ impl Payload for TransferObjectTestPayload {
         self.transfer_to = recipient;
         self.gas = updated_gas;
     }
-    fn make_transaction(&mut self) -> VerifiedTransaction {
+    fn make_transaction(&mut self) -> Transaction {
         let (gas_obj, _, keypair) = self.gas.iter().find(|x| x.1 == self.transfer_from).unwrap();
         make_transfer_object_transaction(
             self.transfer_object,
@@ -78,6 +80,9 @@ impl Payload for TransferObjectTestPayload {
                 .borrow()
                 .reference_gas_price,
         )
+    }
+    fn get_failure_type(&self) -> Option<ExpectedFailureType> {
+        None
     }
 }
 
@@ -100,8 +105,10 @@ impl TransferObjectWorkloadBuilder {
         num_workers: u64,
         in_flight_ratio: u64,
         num_transfer_accounts: u64,
+        duration: Interval,
+        group: u32,
     ) -> Option<WorkloadBuilderInfo> {
-        let target_qps = (workload_weight * target_qps as f32) as u64;
+        let target_qps = (workload_weight * target_qps as f32).ceil() as u64;
         let num_workers = (workload_weight * num_workers as f32).ceil() as u64;
         let max_ops = target_qps * in_flight_ratio;
         if max_ops == 0 || num_workers == 0 {
@@ -111,6 +118,8 @@ impl TransferObjectWorkloadBuilder {
                 target_qps,
                 num_workers,
                 max_ops,
+                duration,
+                group,
             };
             let workload_builder = Box::<dyn WorkloadBuilder<dyn Payload>>::from(Box::new(
                 TransferObjectWorkloadBuilder {

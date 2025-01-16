@@ -14,7 +14,6 @@ use sui_types::{
         CertifiedCheckpointSummary as Checkpoint, CheckpointSequenceNumber, FullCheckpointContents,
         VerifiedCheckpoint,
     },
-    storage::ReadStore,
     storage::WriteStore,
 };
 use tokio::sync::{mpsc, OwnedSemaphorePermit, Semaphore};
@@ -42,7 +41,6 @@ pub(super) struct Server<S> {
 impl<S> StateSync for Server<S>
 where
     S: WriteStore + Send + Sync + 'static,
-    <S as ReadStore>::Error: std::error::Error,
 {
     async fn push_checkpoint_summary(
         &self,
@@ -85,9 +83,11 @@ where
         request: Request<GetCheckpointSummaryRequest>,
     ) -> Result<Response<Option<Checkpoint>>, Status> {
         let checkpoint = match request.inner() {
-            GetCheckpointSummaryRequest::Latest => {
-                self.store.get_highest_synced_checkpoint().map(Some)
-            }
+            GetCheckpointSummaryRequest::Latest => self
+                .store
+                .get_highest_synced_checkpoint()
+                .map(Some)
+                .map_err(|e| Status::internal(e.to_string()))?,
             GetCheckpointSummaryRequest::ByDigest(digest) => {
                 self.store.get_checkpoint_by_digest(digest)
             }
@@ -95,7 +95,6 @@ where
                 .store
                 .get_checkpoint_by_sequence_number(*sequence_number),
         }
-        .map_err(|e| Status::internal(e.to_string()))?
         .map(VerifiedCheckpoint::into_inner);
 
         Ok(Response::new(checkpoint))
@@ -125,10 +124,7 @@ where
         &self,
         request: Request<CheckpointContentsDigest>,
     ) -> Result<Response<Option<FullCheckpointContents>>, Status> {
-        let contents = self
-            .store
-            .get_full_checkpoint_contents(request.inner())
-            .map_err(|e| Status::internal(e.to_string()))?;
+        let contents = self.store.get_full_checkpoint_contents(request.inner());
         Ok(Response::new(contents))
     }
 }
@@ -223,10 +219,12 @@ where
                 }
             })?;
 
-            struct SemaphoreExtension(OwnedSemaphorePermit);
+            struct SemaphoreExtension(#[allow(unused)] OwnedSemaphorePermit);
             inner.call(req).await.map(move |mut response| {
                 // Insert permit as extension so it's not dropped until the response is sent.
-                response.extensions_mut().insert(SemaphoreExtension(permit));
+                response
+                    .extensions_mut()
+                    .insert(Arc::new(SemaphoreExtension(permit)));
                 response
             })
         };

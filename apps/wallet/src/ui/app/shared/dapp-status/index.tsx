@@ -1,26 +1,25 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import Loading from '_components/loading';
+import { useAppDispatch, useAppSelector } from '_hooks';
+import { createDappStatusSelector } from '_redux/slices/permissions';
+import { ampli } from '_src/shared/analytics/ampli';
 import {
-	useFloating,
-	useInteractions,
+	arrow,
+	offset,
 	useClick,
 	useDismiss,
-	offset,
-	arrow,
+	useFloating,
+	useInteractions,
 } from '@floating-ui/react';
 import { ChevronDown12, Dot12 } from '@mysten/icons';
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import { memo, useCallback, useMemo, useRef, useState } from 'react';
 
 import { useActiveAddress } from '../../hooks/useActiveAddress';
 import { ButtonConnectedTo } from '../ButtonConnectedTo';
 import { appDisconnect } from './actions';
-import Loading from '_components/loading';
-import { useAppDispatch, useAppSelector } from '_hooks';
-import { createDappStatusSelector } from '_redux/slices/permissions';
-import { trackEvent } from '_src/shared/plausible';
-
 import st from './DappStatus.module.scss';
 
 function DappStatus() {
@@ -34,12 +33,12 @@ function DappStatus() {
 		}
 	}, [activeOriginUrl]);
 	const activeOriginFavIcon = useAppSelector(({ app }) => app.activeOriginFavIcon);
+	const activeAddress = useActiveAddress();
 	const dappStatusSelector = useMemo(
-		() => createDappStatusSelector(activeOriginUrl),
-		[activeOriginUrl],
+		() => createDappStatusSelector(activeOriginUrl, activeAddress),
+		[activeOriginUrl, activeAddress],
 	);
 	const isConnected = useAppSelector(dappStatusSelector);
-	const activeAddress = useActiveAddress();
 	const [disconnecting, setDisconnecting] = useState(false);
 	const [visible, setVisible] = useState(false);
 	const onHandleClick = useCallback(
@@ -56,7 +55,7 @@ function DappStatus() {
 		y,
 		context,
 		reference,
-		floating,
+		refs,
 		middlewareData: { arrow: arrowData },
 	} = useFloating({
 		open: visible,
@@ -73,9 +72,6 @@ function DappStatus() {
 	]);
 	const onHandleDisconnect = useCallback(async () => {
 		if (!disconnecting && isConnected && activeOriginUrl && activeAddress) {
-			trackEvent('AppDisconnect', {
-				props: { source: 'Header' },
-			});
 			setDisconnecting(true);
 			try {
 				await dispatch(
@@ -84,6 +80,11 @@ function DappStatus() {
 						accounts: [activeAddress],
 					}),
 				).unwrap();
+				ampli.disconnectedApplication({
+					applicationUrl: activeOriginUrl,
+					disconnectedAccounts: 1,
+					sourceFlow: 'Header',
+				});
 				setVisible(false);
 			} catch (e) {
 				// Do nothing
@@ -98,6 +99,7 @@ function DappStatus() {
 	return (
 		<>
 			<ButtonConnectedTo
+				truncate
 				iconBefore={<Dot12 className="text-success" />}
 				text={activeOrigin || ''}
 				iconAfter={<ChevronDown12 />}
@@ -121,7 +123,7 @@ function DappStatus() {
 						className={st.popup}
 						style={{ top: y || 0, left: x || 0 }}
 						{...getFloatingProps()}
-						ref={floating}
+						ref={refs.setFloating}
 					>
 						<div className={st.popupContent}>
 							<div className={st.originContainer}>

@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 
 import { useBackgroundClient } from './useBackgroundClient';
 
-export function useQredoInfo(qredoID?: string) {
+export function useQredoInfo(qredoID: string | null) {
 	const backgroundClient = useBackgroundClient();
 	return useQuery({
 		queryKey: ['qredo', 'info', qredoID],

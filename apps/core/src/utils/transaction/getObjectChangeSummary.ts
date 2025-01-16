@@ -1,16 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 import {
-	type SuiAddress,
-	SuiObjectChangeTransferred,
+	DisplayFieldsResponse,
+	SuiObjectChange,
 	SuiObjectChangeCreated,
+	SuiObjectChangeDeleted,
 	SuiObjectChangeMutated,
 	SuiObjectChangePublished,
-	SuiObjectChange,
-	DisplayFieldsResponse,
-	SuiObjectChangeDeleted,
+	SuiObjectChangeTransferred,
 	SuiObjectChangeWrapped,
-} from '@mysten/sui.js';
+} from '@mysten/sui/client';
+
 import { groupByOwner } from './groupByOwner';
 import { SuiObjectChangeTypes } from './types';
 
@@ -28,10 +28,7 @@ export type ObjectChangeSummary = {
 	[K in SuiObjectChangeTypes]: ObjectChangesByOwner;
 };
 
-export const getObjectChangeSummary = (
-	objectChanges: SuiObjectChangeWithDisplay[],
-	currentAddress?: SuiAddress | null,
-) => {
+export const getObjectChangeSummary = (objectChanges: SuiObjectChangeWithDisplay[]) => {
 	if (!objectChanges) return null;
 
 	const mutated = objectChanges.filter(
@@ -39,9 +36,7 @@ export const getObjectChangeSummary = (
 	) as SuiObjectChangeMutated[];
 
 	const created = objectChanges.filter(
-		(change) =>
-			change.type === 'created' &&
-			(typeof currentAddress === 'undefined' || change.sender === currentAddress),
+		(change) => change.type === 'created',
 	) as SuiObjectChangeCreated[];
 
 	const transferred = objectChanges.filter(

@@ -1,20 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { exec } from 'child_process';
+import { resolve } from 'path';
 import { randomBytes } from '@noble/hashes/utils';
 import SentryWebpackPlugin from '@sentry/webpack-plugin';
-import { exec } from 'child_process';
 import CopyPlugin from 'copy-webpack-plugin';
 import DotEnv from 'dotenv-webpack';
 import gitRevSync from 'git-rev-sync';
 import HtmlWebpackPlugin from 'html-webpack-plugin';
 import MiniCssExtractPlugin from 'mini-css-extract-plugin';
-import { resolve } from 'path';
 import { DefinePlugin, ProvidePlugin } from 'webpack';
+import type { Configuration } from 'webpack';
 
 import packageJson from '../../package.json';
-
-import type { Configuration } from 'webpack';
 
 function generateDateVersion(patch: number) {
 	const sha = gitRevSync.short();
@@ -111,6 +110,12 @@ const commonConfig: () => Promise<Configuration> = async () => {
 		},
 		resolve: {
 			extensions: ['.ts', '.tsx', '.js'],
+			// Fix .js imports from @mysten/sui since we are importing it from source
+			extensionAlias: {
+				'.js': ['.js', '.ts', '.tsx', '.jsx'],
+				'.mjs': ['.mjs', '.mts'],
+				'.cjs': ['.cjs', '.cts'],
+			},
 			alias,
 			fallback: {
 				crypto: false,
@@ -180,6 +185,11 @@ const commonConfig: () => Promise<Configuration> = async () => {
 								...walletVersionDetails,
 								name: APP_NAME,
 								description: packageJson.description,
+								...(IS_DEV
+									? {
+											key: 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA2HTQu/66edl64fM/SKDnHJmCz9SIYqM/QK7NM3vD1LTE2UNXzHX5Clj8geuoWAYS6HE/aFcd//qPnAh8TnPgqTS3IX+IbZsY/+kcokxIEWHly3eKEHWB32tQsGdJx6tgDzx8TRkFZEcCCdE4pFqQO68W3I/+8AQPosdd5fsIoF6OGKZ/i29mpGkYJSmMroCN5zYCQqvpjTBIkiTkI9TTjxmBid77pHyG4TsHz0wda4KxHV9ZtzZQXB4vexTku/Isczdtif7pDqFEDCAqEkpiGPyKoIuqrxc75IfpzIGFsIylycBr0fZellSsl2M6FM34R99/vUrGj5iWcjNmhYvZ8QIDAQAB',
+										}
+									: undefined),
 							};
 							return JSON.stringify(manifestJson, null, 4);
 						},
@@ -198,6 +208,7 @@ const commonConfig: () => Promise<Configuration> = async () => {
 				// 'typeof window': JSON.stringify(typeof {}),
 				'process.env.NODE_DEBUG': false,
 				'process.env.WALLET_KEYRING_PASSWORD': JSON.stringify(
+					// eslint-disable-next-line no-restricted-globals
 					IS_DEV ? 'DEV_PASS' : Buffer.from(randomBytes(64)).toString('hex'),
 				),
 				'process.env.WALLET_BETA': WALLET_BETA,
